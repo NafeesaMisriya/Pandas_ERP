@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Package,
+  Boxes,
   Truck,
   History,
   FileText,
@@ -14,28 +15,38 @@ import {
   Users,
   Building2,
   UserCheck,
-  ChevronLeft
+  ChevronLeft,
+  Activity,
+  CreditCard,
+  Lock,
+  Unlock,
+  ShieldCheck
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard, adminOnly: true },
   { name: 'Billing / POS', path: '/billing', icon: ShoppingCart },
-  { name: 'Products Master', path: '/products', icon: Package },
-  { name: 'Purchase Entry', path: '/purchases', icon: Truck },
-  { name: 'Purchase History', path: '/purchases/history', icon: History },
+  { name: 'Products Master', path: '/products', icon: Package, adminOnly: true },
+  { name: 'Inventory & Stock', path: '/inventory', icon: Boxes, adminOnly: true },
+  { name: 'Purchase Entry', path: '/purchases', icon: Truck, adminOnly: true },
+  { name: 'Purchase History', path: '/purchases/history', icon: History, adminOnly: true },
+  { name: 'Accounts Payable', path: '/payables', icon: CreditCard, adminOnly: true },
   { name: 'Invoices & Bills', path: '/bills', icon: FileText },
-  { name: 'Sales Reports', path: '/reports', icon: BarChart3 },
-  { name: 'Daily Z-Report', path: '/z-report', icon: CalendarCheck },
-  { name: 'Expenses', path: '/expenses', icon: Receipt, placeholder: true },
-  { name: 'Accounting', path: '/accounting', icon: BookOpen, placeholder: true },
-  { name: 'Customers', path: '/customers', icon: Users, placeholder: true },
-  { name: 'Suppliers', path: '/suppliers', icon: Building2, placeholder: true },
-  { name: 'Users & Employees', path: '/users', icon: UserCheck, placeholder: true },
+  { name: 'Sales Reports', path: '/reports', icon: BarChart3, adminOnly: true },
+  { name: 'Daily Z-Report', path: '/z-report', icon: CalendarCheck, adminOnly: true },
+  { name: 'Expenses', path: '/expenses', icon: Receipt, adminOnly: true },
+  { name: 'Profit & Loss', path: '/profit-loss', icon: Activity, adminOnly: true },
+  { name: 'Customers', path: '/customers', icon: Users, adminOnly: true },
+  { name: 'Suppliers', path: '/suppliers', icon: Building2, adminOnly: true },
+  { name: 'Accounting', path: '/accounting', icon: BookOpen, placeholder: true, adminOnly: true },
+  { name: 'Users & Employees', path: '/users', icon: UserCheck, placeholder: true, adminOnly: true },
 ];
 
 export const Sidebar = ({ collapsed, setCollapsed }) => {
   const toast = useToast();
+  const { isAdmin, mode, openLoginModal, lockAdmin } = useAuth();
 
   return (
     <aside
@@ -82,7 +93,9 @@ export const Sidebar = ({ collapsed, setCollapsed }) => {
 
       {/* Nav List */}
       <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1 scrollbar-none">
-        {navItems.map((item) => {
+        {navItems
+          .filter((item) => !item.adminOnly || isAdmin)
+          .map((item) => {
           const Icon = item.icon;
 
           if (item.placeholder) {
@@ -127,6 +140,19 @@ export const Sidebar = ({ collapsed, setCollapsed }) => {
             </NavLink>
           );
         })}
+
+        {/* Cashier Mode Quick Unlock Link in Sidebar */}
+        {!isAdmin && (
+          <button
+            type="button"
+            onClick={openLoginModal}
+            className="w-full flex items-center gap-3.5 px-3.5 py-2.5 mt-2 rounded-xl font-semibold text-xs text-[#F5B900] bg-[#F5B900]/10 hover:bg-[#F5B900]/20 border border-[#F5B900]/30 transition group text-left"
+            title={collapsed ? "Admin Access" : undefined}
+          >
+            <ShieldCheck className="w-[18px] h-[18px] shrink-0 text-[#F5B900]" />
+            {!collapsed && <span className="truncate">Admin Access</span>}
+          </button>
+        )}
       </nav>
 
       {/* Footer Info */}

@@ -1,117 +1,131 @@
-# 🐼 PANDAS – Point of Sale (POS) & Retail Management System
+<div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
-![Flask](https://img.shields.io/badge/Flask-2.0%2B-black?style=for-the-badge&logo=flask)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12%2B-336791?style=for-the-badge&logo=postgresql)
-![xhtml2pdf](https://img.shields.io/badge/PDF-xhtml2pdf-red?style=for-the-badge)
-![License](https://img.shields.io/badge/License-Proprietary-green?style=for-the-badge)
+  <img src="static/images/logo.png" alt="PANDAS ERP Logo" width="240" />
 
-**PANDAS** is a lightweight, full-featured **Point of Sale (POS), Inventory Control, Supplier Purchase Tracking, and Financial Settlement System** built with Python and Flask, powered by a relational PostgreSQL database.
+  # 🐼 PANDAS ERP
+  ### Modern Retail Point of Sale (POS), Inventory Control & Financial Management System
 
-Designed specifically for FMCG, confectioneries, dry fruit & nut merchants, and retail convenience stores, PANDAS delivers rapid checkout, live cart management, transaction parking (Hold/Resume), automated invoice PDF generation, automated inventory adjustments, and end-of-day **Daily Z-Report** accounting settlements.
+  [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+  [![Flask](https://img.shields.io/badge/Flask-2.3%2B-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+  [![React](https://img.shields.io/badge/React-18.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+  [![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+  [![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+  [![License](https://img.shields.io/badge/License-Proprietary-F5B900?style=for-the-badge)](LICENSE)
+
+  <p align="center">
+    A high-throughput, enterprise-grade retail operations platform engineered for confectioneries, dry fruit & nut merchants, FMCG supermarkets, and retail stores. Combines an ultra-responsive React 18 single-page application with a resilient Python/Flask REST backend and a relational PostgreSQL database.
+  </p>
+
+  <p align="center">
+    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-key-features">Key Features</a> •
+    <a href="#-system-architecture">Architecture</a> •
+    <a href="#-database-schema">Database Schema</a> •
+    <a href="#-rest-api-documentation">API Reference</a> •
+    <a href="#-production-deployment">Production Guide</a>
+  </p>
+
+</div>
 
 ---
 
-## 📑 Table of Contents
+## 📖 Overview
 
-- [Key Features](#-key-features)
-- [System Architecture & Data Flow](#-system-architecture--data-flow)
-- [Database Architecture & ER Diagram](#-database-architecture--er-diagram)
-- [Directory Structure](#-directory-structure)
-- [Tech Stack](#-tech-stack)
-- [Enterprise Gold-Black-White Design System](#-enterprise-gold-black-white-design-system)
-- [Item Code Nomenclature](#-item-code-nomenclature)
-- [Installation & Setup Guide](#-installation--setup-guide)
-  - [Prerequisites](#prerequisites)
-  - [1. Clone / Open Project](#1-clone--open-project)
-  - [2. Virtual Environment Setup](#2-virtual-environment-setup)
-  - [3. Install Dependencies](#3-install-dependencies)
-  - [4. PostgreSQL Database Initialization](#4-postgresql-database-initialization)
-  - [5. Database Credentials Configuration](#5-database-credentials-configuration)
-  - [6. Import Product Catalog](#6-import-product-catalog)
-  - [7. Run the Application](#7-run-the-application)
-- [Application Walkthrough & Workflows](#-application-walkthrough--workflows)
-- [Route & API Reference](#-route--api-reference)
-- [Configuration & Production Deployment](#-configuration--production-deployment)
-- [Troubleshooting & FAQ](#-troubleshooting--faq)
-- [Future Roadmap](#-future-roadmap)
+**PANDAS ERP** is a full-stack retail management suite crafted to eliminate bottlenecks during peak store hours while keeping financial accounting, vendor shipments, and product inventory perfectly aligned.
+
+### Why PANDAS?
+* ⚡ **Zero-Latency Checkout**: Real-time cart calculations, keyboard-accessible workflows, inline price/quantity overrides, and transaction parking (**Hold & Resume bills**).
+* 🛡 **Strict Unit & Stock Integrity**: Decimal-aware arithmetic for loose goods (`kg`, `gm`, `ltr`, `m`) alongside integer enforcement for discrete goods (`pc`, `box`, `btl`), preventing fractional stock errors.
+* 📦 **Decoupled Procurement Statuses**: Physical Goods Receipt (`Pending Receipt`, `Received`, `Verified`) is completely decoupled from Financial Settlement (`Paid`, `Partially Paid`, `Unpaid`), ensuring stock is never incremented twice and receiving goods never erroneously marks an invoice as paid.
+* 🧾 **Automated Invoicing & Closing**: Instant PDF invoice generation via `xhtml2pdf` with automatic archival by year/month, accompanied by immutable end-of-day **Daily Z-Report** register closings.
+* ✨ **Bespoke Luxury UI**: Built on an enterprise **Gold-Black-White** design system (`#111111` Charcoal, `#F5B900` Gold, `#FAF9F5` Main Background, `#FFFFFF` Cards).
 
 ---
 
 ## 🚀 Key Features
 
-### 🧾 1. Fast Point of Sale (POS) & Billing
-- **Category-Based Filtering:** Rapidly toggle between product departments (*Chocolates, Nuts, Dates, Dry Fruits, Drinks, Mill Products*).
-- **Dynamic Cart Management:** Add items with decimal quantities, edit quantities, and perform inline price adjustments on the fly.
-- **Hold & Resume Bills (Parked Transactions):** Park a customer's active cart into the database (`held_bills`) when they need more time, serve subsequent customers, and resume the transaction with a single click.
-- **Customer & Payment Tracking:** Log customer details (name and phone number) and choose payment modes: `Cash`, `UPI`, or `Card`.
-- **Automated Sequential Invoicing:** Generates formatted invoice numbers according to year and sequence: `INV-YYYY-XXXXX` (e.g., `INV-2026-00001`).
-- **Real-Time Stock Decrement:** Product stock levels automatically decrease upon finalizing checkout.
-- **Automated PDF Archival:** Converts bills into printable PDF invoices via `xhtml2pdf`, automatically archived into time-partitioned folders (`static/invoices/YYYY/MM/`).
-- **Thermal & A4 Print Support:** Print-optimized styling for receipts and invoices (`window.print()`).
-- **Searchable Bill History:** View historical transactions with instant full-text filtering by invoice number or customer name.
+### 🧾 1. Point of Sale (POS) & Fast Billing
+* **Multi-Category Quick Tabs**: Instant department navigation across *Chocolates, Nuts, Dates, Dry Fruits, Drinks, Mill Products*, and custom categories.
+* **Smart Live Cart**: Real-time line item subtotals, GST/tax computation, and instant item removal or inline quantity tweaks.
+* **Held Bills (Parked Transactions)**: Park active carts to the database (`held_bills`) when customers need time, serve the next shopper, and resume with a single click.
+* **Flexible Multi-Channel Tender**: Record payments seamlessly via **Cash**, **UPI** (GPay, PhonePe, Paytm), **Card**, or **Credit/Split**.
+* **Automated Sequential Numbering**: Generates standardized invoice numbers with annual reset: `INV-YYYY-XXXXX` (e.g., `INV-2026-00042`).
+* **Instant Stock Decrement**: Atomically decrements catalog inventory in PostgreSQL upon checkout finalization.
+* **Dual Print Engine**: Thermal receipt printer layout (80mm/58mm) and full A4 tax invoice printouts with automatic browser print triggering.
 
-### 📦 2. Product Master & Inventory Control
-- **Comprehensive Product Profiles:** Tracks Item Code, Product Name, Category, Stock Level, Unit of Measure (`kg`, `pc`, etc.), Sale Price, Cost Price, Sales Tax %, Purchase Tax %, Invoicing Policy, Ledger Accounts (Income/Expense), and Brand/Company.
-- **Auto-Generated Item Codes:** Generates structured category-prefixed SKU codes (e.g., `C101`, `N101`, `F101`).
-- **Product Image Management:** Direct binary image upload stored as `BYTEA` in PostgreSQL and streamed via dedicated HTTP endpoints.
-- **Quick Price & Stock Editing:** Inline modifications directly from the product catalog table.
-- **Bulk CSV Ingestion:** Comes with `prod_import.py` to seed or bulk-update inventory from `products.csv` with conflict-safe SQL (`ON CONFLICT DO NOTHING`).
+### 📦 2. Catalog Master & Inventory Control
+* **Comprehensive SKU Profiles**: Manages SKU code, product name, category, stock balance, unit of measure, selling price, cost price, GST tax rates, ledger accounts, and brand manufacturer.
+* **Automated SKU Nomenclature**: Dynamically suggests next-in-sequence SKU codes based on category prefixes (e.g. `C101`, `N101`, `D101`).
+* **Binary Image Storage**: Direct image upload and streaming stored securely as `BYTEA` blobs with MIME validation in PostgreSQL.
+* **Fast Inline Updates**: Update selling prices and stock quantities directly from the table without opening full edit modals.
+* **Instant Filter Reset**: Dedicated, persistent **Reset Filters** button that clears search queries, department filters, stock health states, and sorting in one click without page refreshes.
+* **Unit Validation Guard**: Automatic client and server validation ensuring integer units (`pc`, `box`, `bottle`) cannot have fractional values, while weight/volume units (`kg`, `gm`, `ltr`) support high-precision decimals.
 
-### 🛒 3. Supplier Purchase & Stock Inflow
-- **Multi-Line Purchase Entry:** Record supplier bills with supplier name, purchase date, invoice payment status, and individual item costs.
-- **Automated Stock Increment:** Entering purchases automatically replenishes item quantities in the inventory master.
-- **Purchase History Auditing:** Filter historical purchases by supplier name and transaction date to inspect unit costs and totals.
+### 🛒 3. Inward Procurement & Purchase Auditing
+* **Independent Goods Receipt Status**:
+  * `Pending Receipt`: Shipment in transit. Database stock is **not** increased.
+  * `Received`: Physical goods arrived at the shop. Catalog inventory is updated automatically.
+  * `Verified`: Stock inspected and accepted against vendor delivery challan/PO.
+  * `Partially Received`: Partial deliveries safely tracked.
+* **Automated Financial Settlement**:
+  * Calculates `Paid`, `Partially Paid`, or `Unpaid` dynamically based on grand total vs. actual recorded payments.
+  * Support for partial supplier payments with balance due tracking.
+  * Physical arrival and verification never inadvertently alter payment settlement.
+* **Idempotent Stock Protection**: Guarded by `stock_updated` boolean flags to guarantee inventory is updated once and never duplicated.
+* **Consignment Audit Ledger**: Filter historical consignments by supplier and invoice date with line-item breakdowns.
 
-### 📊 4. Financial Analytics & Daily Z-Report
-- **Date-Range Sales Reports:** Filter total sales volume and revenue by custom date intervals (`From Date` to `To Date`).
-- **Category & Item Analytics:** Granular breakdown of units sold and gross sales per category and product.
-- **End-of-Day Daily Z-Report (`/z-report`):**
-  - Instant audit summarizing **Total Bills**, **Gross Sales**, **Cancelled Sales**, and **Net Sales**.
-  - Payment channel breakdown: **Cash Sales**, **UPI Sales**, and **Card Sales**.
-  - **Audit Immutability:** Once generated for a given date, the Z-Report locks and stores the snapshot in the `z_reports` table to prevent tampering.
-  - Receipt-style print template with automated browser print trigger.
+### 📊 4. Financial Reports & End-of-Day Z-Report
+* **Date-Range Sales Analytics**: Visual revenue metrics, department sales share, and SKU velocity reports.
+* **Daily Z-Report Settlement (`/z-report`)**:
+  * Audits total invoices, gross sales, cancellations, and net revenue.
+  * Detailed payment breakdown across Cash, UPI, and Card.
+  * **Immutable Audit Trail**: Once generated for a given business day, the Z-Report freezes into the `z_reports` database table to prevent post-close tampering.
+  * Thermal register receipt layout with auto-print execution.
 
 ---
 
-## 🏗 System Architecture & Data Flow
+## 🏗 System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Frontend / Client Layer"]
-        UI["Web Browser (Desktop / POS Terminal)"]
-        Print["Thermal Receipt / A4 Printer"]
+    subgraph Client ["Client Presentation Layer (Vite + React 18)"]
+        SPA["React SPA (Dashboard, POS, Master, Purchases, Reports)"]
+        State["Context API (Toast, Theme, Modal Portals)"]
+        AxiosClient["Axios REST Client (Interceptors & Proxy)"]
     end
 
-    subgraph App ["Flask Application Layer (Python 3.10+)"]
-        Router["Flask Router (app.py)"]
-        SessionStore["Flask Session (Cart & State)"]
-        BillingMod["Billing Engine (billing.py)"]
-        ReportsMod["Analytics Engine (reports.py)"]
-        PDFGen["PDF Renderer (xhtml2pdf / pisa)"]
+    subgraph Server ["Application Server Layer (Python 3.10+ / Flask)"]
+        Router["Flask REST API (/api/*)"]
+        AuthValid["Unit & Schema Validation Engine"]
+        BillingEng["POS Billing & Sequential Sequence Engine"]
+        PurchaseEng["Procurement & Idempotent Stock Guard"]
+        PDFEng["PDF Invoice Generator (xhtml2pdf / pisa)"]
     end
 
-    subgraph Storage ["Data & File Storage"]
-        PG[("PostgreSQL Database (pandas)")]
-        DiskArchive["Local Invoices Storage (static/invoices/YYYY/MM/)"]
+    subgraph Persistence ["Persistence & Archival Layer"]
+        PG[("PostgreSQL 14+ Relational Database")]
+        PDFStorage["File Storage (static/invoices/YYYY/MM/*.pdf)"]
     end
 
-    UI <-->|HTTP GET / POST| Router
-    Router <--> SessionStore
-    Router --> BillingMod
-    Router --> ReportsMod
-    Router --> PDFGen
-    PDFGen --> DiskArchive
-    PDFGen --> UI
-    UI --> Print
-    Router <-->|psycopg2 SQL Queries| PG
+    SPA <--> State
+    State <--> AxiosClient
+    AxiosClient <-->|JSON over HTTP / REST| Router
+    Router --> AuthValid
+    AuthValid --> BillingEng
+    AuthValid --> PurchaseEng
+    BillingEng --> PG
+    PurchaseEng --> PG
+    BillingEng --> PDFEng
+    PDFEng --> PDFStorage
+    Router --> PG
 ```
 
 ---
 
-## 🗄 Database Architecture & ER Diagram
+## 🗄 Database Schema
 
-The database uses PostgreSQL (`pandas`) with foreign key constraints and transactional integrity.
+The database leverages PostgreSQL with foreign key constraints, indexes, and transactional consistency:
 
 ```mermaid
 erDiagram
@@ -183,7 +197,14 @@ erDiagram
         VARCHAR supplier_name
         NUMERIC total
         VARCHAR bill_status
+        VARCHAR receipt_status
+        VARCHAR payment_status
+        VARCHAR payment_method
+        NUMERIC paid_amount
         DATE purchase_date
+        DATE receipt_date
+        DATE verified_date
+        BOOLEAN stock_updated
         TIMESTAMP created_at
     }
 
@@ -218,86 +239,104 @@ erDiagram
 ```text
 pandass/
 │
-├── app.py                      # Main Flask application controller, routing & business logic
-├── db.py                       # PostgreSQL connection helper (psycopg2)
-├── billing.py                  # POS arithmetic and cart calculation routines
-├── reports.py                  # Reporting queries & daily sales aggregation
-├── prod_import.py              # Catalog seeding script from CSV into PostgreSQL
+├── app.py                      # Flask REST API controllers, routing & business logic
+├── db.py                       # PostgreSQL connection pool & resilient reconnect logic
+├── billing.py                  # POS arithmetic, cart validation, tax calculation
+├── reports.py                  # Analytical queries, category aggregation, Z-Reports
+├── prod_import.py              # CSV bulk catalog seeding with conflict guards
 ├── products.csv                # Sample product inventory catalog
-├── schema.sql                  # Complete PostgreSQL DDL database setup script
-├── requirements.txt            # Python dependencies specification
-├── README.md                   # Project documentation
+├── schema.sql                  # Comprehensive PostgreSQL DDL initialization schema
+├── requirements.txt            # Python backend dependencies
+├── start.bat                   # 1-click Windows startup script (Flask + Vite)
+├── start.ps1                   # 1-click PowerShell startup script
+├── README.md                   # Enterprise system documentation
 │
-├── static/
-│   ├── css/
-│   │   └── style.css           # Global UI styling, card layouts & print rules
+├── frontend/                   # Modern React 18 Single-Page Application
+│   ├── package.json            # Node.js dependencies & Vite scripts
+│   ├── vite.config.js          # Vite configuration with API proxy rules
+│   ├── tailwind.config.js      # Enterprise gold-black color palette tokens
+│   ├── index.html              # HTML5 application shell & font imports
+│   └── src/
+│       ├── main.jsx            # React root mount
+│       ├── App.jsx             # Application router & base layout wrapper
+│       ├── index.css           # Global Tailwind directives & modal portal styling
+│       ├── components/
+│       │   ├── common/         # Reusable Modal (createPortal), Badge, Loading
+│       │   └── layout/         # Sidebar navigation & TopHeader component
+│       ├── context/            # ToastContext notification engine
+│       ├── pages/
+│       │   ├── Dashboard/      # Executive KPIs, shop banner & stock alerts
+│       │   ├── Billing/        # High-speed POS terminal & parked bill drawer
+│       │   ├── Products/       # Catalog master, SKU generator & quick edits
+│       │   ├── Purchases/      # Inward procurement with receipt & payment separation
+│       │   ├── PurchaseHistory/# Purchase audit history & PO verification
+│       │   ├── Bills/          # Historical invoice search & PDF previews
+│       │   ├── Reports/        # Date-range sales performance & category share
+│       │   └── ZReport/        # End-of-day register closing & thermal receipt
+│       ├── services/
+│       │   └── api.js          # Axios API service clients
+│       └── utils/
+│           └── unitValidation.js# Integer vs decimal unit validator
+│
+├── static/                     # Assets & PDF Archives
 │   ├── images/
-│   │   ├── logo.png            # Main brand header logo
-│   │   ├── logob.png           # Alternate brand logo
-│   │   └── logoo.png           # Dashboard brand emblem
-│   └── invoices/               # Auto-generated PDF bills archive
-│       └── 2026/
-│           ├── 02/             # Partitioned invoices for Feb 2026
-│           └── 03/             # Partitioned invoices for Mar 2026
+│   │   ├── Psym.png            # Sidebar emblem symbol
+│   │   ├── logo.png            # Complete PANDAS logo
+│   │   ├── logoo.png           # Banner emblem with gold backdrop
+│   │   └── logob.png           # Customer receipt & print logo
+│   └── invoices/               # Generated invoice storage (YYYY/MM/*.pdf)
 │
-└── templates/
-    ├── dashboard.html          # Central navigation launchpad
-    ├── billing.html            # Main Point of Sale checkout console
-    ├── verify_bill.html        # Customer confirmation & payment mode selection
-    ├── bill.html               # Bill receipt template (rendered in HTML and PDF)
-    ├── bills_list.html         # Historical invoices listing with search
-    ├── products.html           # Product list view with quick price/stock updates
-    ├── product_form.html       # Full ERP product creation and edit screen
-    ├── purchase.html           # Supplier purchase entry form
-    ├── purchase_history.html   # Purchase records search & detailed audit viewer
-    ├── reports.html            # Date-filtered sales and category performance reports
-    ├── z_report.html           # End-of-day Z-Report settlement slip
-    └── login.html              # Optional authentication splash
+└── templates/                  # Jinja2 Server-side HTML & PDF Templates
+    ├── bill.html               # Print & xhtml2pdf invoice document template
+    ├── z_report.html           # Thermal register closing slip
+    └── ...                     # Legacy views maintained for backwards compatibility
 ```
 
 ---
 
 ## 💻 Tech Stack
 
-- **Frontend Architecture:** [React 18](https://react.dev/), [Vite](https://vitejs.dev/), [React Router DOM v6](https://reactrouter.com/)
-- **UI Styling & Icons:** [Tailwind CSS v3.4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
-- **HTTP Client:** [Axios](https://axios-http.com/) (with credentials support & proxying)
-- **Backend Framework:** [Flask](https://palletsprojects.com/p/flask/) (Python 3.10+) RESTful JSON APIs
-- **Database Engine:** [PostgreSQL](https://www.postgresql.org/) (Version 12 or newer)
-- **Database Driver:** [psycopg2-binary](https://pypi.org/project/psycopg2-binary/)
-- **PDF Engine:** [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) (`pisa`)
-- **Templating:** Jinja2 (for automated PDF invoice compilation)
+| Domain | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend Framework** | **React 18** | High-performance SPA with concurrent rendering |
+| **Build Tool** | **Vite 5** | Instant HMR development and optimized production bundles |
+| **Styling** | **Tailwind CSS 3.4** | Utility-first CSS with customized enterprise tokens |
+| **Icons** | **Lucide React** | Clean, lightweight enterprise SVG icon suite |
+| **Routing** | **React Router DOM v6** | Declarative client-side routing & search params handling |
+| **HTTP Client** | **Axios** | Promised-based HTTP client configured with proxying |
+| **Backend Framework**| **Python 3.10+ / Flask 2.3+**| Lightweight REST API architecture |
+| **Database** | **PostgreSQL 14+** | ACID-compliant relational storage engine |
+| **Database Driver** | **psycopg2-binary** | High-speed C-based PostgreSQL driver |
+| **PDF Rendering** | **xhtml2pdf (`pisa`)** | Converts HTML/CSS templates into PDF documents |
+| **Templating** | **Jinja2** | High-fidelity server-side invoice generation |
 
 ---
 
-## 🎨 Enterprise Gold-Black-White Design System
+## 🎨 Enterprise Design System
 
-The application features a consistent, luxury enterprise theme designed for commercial retail ERP environments:
+The platform implements a luxury gold-charcoal-white enterprise visual language:
 
-### 1. Brand Assets & Placements
-- **Application Sidebar Branding:** Logo symbol `Psym.png` paired with clean `PANDAS` typography over a deep black (`bg-navy-900`) sidebar with gold navigation accents (`bg-gold-500 text-navy-900`).
-- **Dashboard Shop Banner:** Store banner displaying `logoo.png`, heading **Nuts & Chocolates**, subtitle, contact numbers, and fast action launchpads.
-- **Customer Documents & Receipts:** Thermal receipt printout and modal previews use `logob.png`.
+```text
+Deep Charcoal:   #111111   (Sidebar, Headers, Primary Headings)
+Charcoal Muted:  #1A1A1A   (Secondary Surfaces)
+Brand Gold:      #F5B900   (Active Navigation, Buttons, Accents)
+Dark Gold:       #D99A00   (Hover States & Borders)
+Background:      #FAF9F5   (Warm Surface Backdrop)
+Cards & Modals:  #FFFFFF   (Clean White Elevating Contrast)
+Borders:         #E5E7EB   (Subtle Slate Dividers)
+```
 
-### 2. Color Palette & Semantic Tokens
-- **Brand Gold:** Primary actions, active navigation state, active tab pills, focused highlights (`#E5A910` / `#D9A020`).
-- **Deep Black / Charcoal (`navy-900`):** `#111318` / `#161922` used for the sidebar, top header, checkout console headers, and high-emphasis summaries.
-- **Warm White (`surface-warm`):** `#FBFBFA` workspace backdrop avoiding harsh sterile gray.
-- **Cards & Data Tables:** Crisp white backgrounds with subtle `slate-200/80` borders and rich gold hover elevation (`hover:border-gold-300`, `hover:bg-gold-50/40`).
-- **System Utilities:**
-  - `.erp-card` & `.erp-card-hover`: Uniform card structure with subtle gold hover shadows.
-  - `.erp-table-head` & `.erp-table-row`: Enterprise table header and row hover interaction.
-  - `.erp-btn-primary`: Gold primary CTA with dark typography.
-  - `.erp-btn-secondary`: Clean white button with subtle slate border and gold hover accent.
-  - `.erp-input`: Standardized focus ring with gold highlight.
+* **Sidebar**: Deep charcoal background (`#111111`) with brand emblem `Psym.png`, crisp white typography, and gold active navigation pills (`#F5B900`).
+* **Dashboard Banner**: Clean white executive card featuring the full brand logo `logo.png`, vertical gold divider, shop location details, and direct action triggers.
+* **Modal Portals**: Mounted cleanly to `document.body` via `ReactDOM.createPortal` with click-outside dismissal and keyboard accessibility.
 
 ---
 
-## 🏷 Item Code Nomenclature
+## 🏷 SKU Numbering Convention
 
-PANDAS automatically prefixes and increments product SKU numbers based on their department:
+SKU item codes are automatically suggested based on category taxonomy:
 
-| Category Prefix | Department | Example Item Code | Numbering Range |
+| Category Prefix | Department | Format Example | Range |
 | :---: | :--- | :---: | :--- |
 | **`C`** | Chocolates | `C101` | C101 – C999 |
 | **`N`** | Nuts | `N101` | N101 – N999 |
@@ -306,255 +345,233 @@ PANDAS automatically prefixes and increments product SKU numbers based on their 
 | **`W`** | Drinks & Beverages | `W101` | W101 – W999 |
 | **`M`** | Mill Products | `M101` | M101 – M999 |
 
-When creating a new product via the UI, selecting the category automatically scans existing codes in PostgreSQL and suggests the next sequence number (e.g. `C101` $\rightarrow$ `C102`).
+When creating a new product, selecting a category queries PostgreSQL for the latest numeric sequence and auto-populates the next identifier.
 
 ---
 
-## ⚙️ Installation & Setup Guide
+## ⚡ Quick Start
 
 ### Prerequisites
-1. **Python 3.10 or higher** installed on your system.
-2. **PostgreSQL 12+** server installed and running.
-3. Access to `psql` or a database administration client (e.g., pgAdmin, DBeaver).
+1. **Python 3.10+**
+2. **Node.js 18+ & npm**
+3. **PostgreSQL 12+** running locally or remotely
 
 ---
 
-### 1. Clone / Open Project
-Open your terminal or PowerShell and navigate to the project root:
-```powershell
-cd c:\Users\Admin\PycharmProjects\PythonProject\pandass
-```
+### Step 1: Clone Repository & Virtual Environment
 
-### 2. Virtual Environment Setup
-Create and activate an isolated Python virtual environment:
-
-**On Windows (PowerShell):**
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-**On Linux / macOS:**
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+# Clone the repository
+git clone https://github.com/your-username/pandas-erp.git
+cd pandas-erp
+
+# Create and activate Python virtual environment
+# Windows:
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Linux / macOS:
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
-Install all required Python libraries from `requirements.txt`:
+### Step 2: Install Dependencies
+
 ```bash
+# Install Python backend requirements
 pip install -r requirements.txt
+
+# Install React frontend packages
+cd frontend
+npm install
+cd ..
 ```
 
-*(Core dependencies: `Flask`, `psycopg2-binary`, `xhtml2pdf`)*
+### Step 3: Database Setup
+
+1. Open `psql` or pgAdmin and create the database:
+   ```sql
+   CREATE DATABASE pandas;
+   ```
+2. Initialize schema tables:
+   ```bash
+   psql -U postgres -d pandas -f schema.sql
+   ```
+3. Configure connection credentials in `db.py`:
+   ```python
+   def get_db_connection():
+       return psycopg2.connect(
+           host=os.getenv("PGHOST", "localhost"),
+           database=os.getenv("PGDATABASE", "pandas"),
+           user=os.getenv("PGUSER", "postgres"),
+           password=os.getenv("PGPASSWORD", "Postgres123"),
+           port=int(os.getenv("PGPORT", 5432))
+       )
+   ```
+4. Seed the initial catalog:
+   ```bash
+   python prod_import.py
+   ```
 
 ---
 
-### 4. PostgreSQL Database Initialization
+### Step 4: Run the Application
 
-Log in to your PostgreSQL instance using `psql` or pgAdmin and create the database:
-```sql
-CREATE DATABASE pandas;
-```
-
-Execute the database schema setup using the bundled `schema.sql`:
-
-**Via Command Line:**
-```bash
-psql -U postgres -d pandas -f schema.sql
-```
-
-*(Or copy the contents of `schema.sql` into pgAdmin Query Tool and execute).*
-
----
-
-### 5. Database Credentials Configuration
-Open `db.py` and verify or update your PostgreSQL connection parameters:
-
-```python
-# db.py
-import psycopg2
-
-def get_db_connection():
-    return psycopg2.connect(
-        host="localhost",
-        database="pandas",
-        user="postgres",       # Your PostgreSQL username
-        password="Postgres123", # Your PostgreSQL password
-        port=5432
-    )
-```
-
-> [!TIP]
-> In production environments, replace hardcoded credentials with environment variables (`os.getenv(...)`).
-
----
-
-### 6. Import Product Catalog
-Populate the database with the initial catalog of products from `products.csv`:
-
-```bash
-python prod_import.py
-```
-
-*Expected output:*
-```text
-✅ Products imported successfully
-```
-
----
-
-### 7. Run the Application
-
-#### Option A: One-Click Startup (Windows)
-Double-click `start.bat` or run:
+#### Option A: One-Click Launch (Windows)
+Double-click `start.bat` or run in PowerShell:
 ```powershell
 .\start.ps1
 ```
-*(This automatically opens the Flask backend on port 5000 and the Vite React frontend on port 5173 in separate terminals).*
 
-#### Option B: Manual Command Line Startup (Recommended for Development)
+#### Option B: Manual Terminal Execution
 
 **Terminal 1 — Flask API Backend:**
 ```powershell
-# Navigate to backend directory and start Flask
-cd backend
 python app.py
 ```
 *Backend runs at: `http://localhost:5000`*
 
-**Terminal 2 — Modern React Frontend:**
+**Terminal 2 — Vite React Frontend:**
 ```powershell
-# In a second terminal, navigate to frontend and start Vite
 cd frontend
 npm run dev
 ```
 *Frontend runs at: `http://localhost:5173`*
 
-Open your browser and navigate to: **`http://localhost:5173`**
-*(Vite proxies API calls to `http://localhost:5000` automatically).*
+Open **`http://localhost:5173`** in your browser. All API requests are proxied seamlessly to the backend.
 
 ---
 
-## 🧭 Application Walkthrough & Workflows
+## 🛣 REST API Documentation
 
-### 🛒 1. Billing & Checkout Workflow
-1. Navigate to **🧾 Billing** (`/billing`).
-2. Select a category on the left sidebar (e.g., *Chocolates*).
-3. Select an item and quantity, then click **Add to Cart**.
-4. Adjust prices or quantities directly in the cart table if needed.
-5. If the customer steps away, click **⏸ Hold Bill** to park the bill. Resume it later from the **Held Bills** drawer.
-6. Enter customer name, phone number, and choose payment mode (`Cash`, `UPI`, `Card`).
-7. Click **Confirm & Checkout**.
-8. The system:
-   - Decrements stock in the `products` table.
-   - Generates an invoice number (e.g., `INV-2026-00001`).
-   - Renders and archives a PDF bill in `static/invoices/YYYY/MM/`.
-   - Opens the printable bill preview (`/bill/INV-2026-00001`).
+### Point of Sale & Billing
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/billing/init` | Fetch products by category, active cart, and held bills |
+| `POST` | `/api/billing/cart/add` | Add an item with validated quantity to active cart |
+| `POST` | `/api/billing/cart/update-qty` | Update line item quantity |
+| `POST` | `/api/billing/cart/update-price`| Override unit sales price |
+| `POST` | `/api/billing/cart/remove` | Delete item from cart |
+| `POST` | `/api/billing/hold` | Park current active cart to `held_bills` |
+| `POST` | `/api/billing/resume/<id>` | Restore parked bill to active cart |
+| `POST` | `/api/billing/checkout` | Finalize sale, decrement stock, generate invoice |
+| `GET` | `/api/bills` | Search and filter completed invoices |
+| `GET` | `/api/bills/<invoice_no>` | Retrieve single invoice details and line items |
+| `POST` | `/api/bills/<invoice_no>/cancel`| Cancel invoice with audit trail for Z-Report |
 
-### 📦 2. Stock Replenishment (Purchases)
-1. Navigate to **🛒 Purchase** (`/purchase`).
-2. Fill in the **Supplier / Shop Name** and **Purchase Date**.
-3. Choose item categories, pick items, and enter purchased quantities and unit cost prices.
-4. Click **Save Purchase**.
-5. Stock for all purchased items automatically increases in the database.
-6. Inspect previous shipments and costs under **📜 View Purchase History** (`/purchase/history`).
+### Product Master & Inventory
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/products` | Retrieve catalog with stock levels, prices, and tax rates |
+| `POST` | `/api/products` | Create a new product SKU with unit validation & image |
+| `PUT` | `/api/products/<item_code>` | Update existing product details or stock |
+| `DELETE` | `/api/products/<item_code>` | Remove product from inventory |
+| `GET` | `/api/products/next-code/<cat>`| Get next sequential SKU for a given category |
+| `GET` | `/api/products/image/<item_code>`| Stream binary product image (`BYTEA`) |
 
-### 📊 3. End-of-Day Settlement (Daily Z-Report)
-1. At closing time, navigate to **📊 Reports** $\rightarrow$ **Daily Z-Report** (`/z-report`).
-2. The system aggregates all completed (`PAID`) transactions for the current date.
-3. Total sales are broken down by payment mode (`Cash`, `UPI`, `Card`), minus any cancelled receipts.
-4. The settlement record is permanently stored in `z_reports`.
-5. The print dialog triggers automatically (`window.print()`) for the thermal receipt printer.
+### Inward Procurement (Purchases)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/purchases/categories` | Retrieve available procurement categories |
+| `GET` | `/api/purchases/items/<cat>` | Retrieve products in a category for procurement |
+| `POST` | `/api/purchases` | Save purchase consignment (with receipt & payment split) |
+| `GET` | `/api/purchases/history` | Filter historical purchases by supplier and date |
+| `POST` | `/api/purchases/<id>/receive` | Mark shipment Received & increment inventory stock |
+| `POST` | `/api/purchases/<id>/verify` | Verify shipment against purchase record |
 
----
-
-## 🛣 Route & API Reference
-
-| Endpoint | Methods | Description |
-| :--- | :---: | :--- |
-| `/` | `GET` | Dashboard home with quick navigation cards |
-| `/billing` | `GET`, `POST` | Primary POS checkout terminal and cart session |
-| `/update-qty/<int:index>` | `POST` | Update item quantity in active cart |
-| `/update-price/<int:index>` | `POST` | Override unit price in active cart |
-| `/remove-item/<int:index>` | `GET` | Delete an item from the active cart |
-| `/hold-bill` | `GET` | Park current cart into `held_bills` table |
-| `/resume-bill/<int:hold_id>` | `GET` | Restore parked bill back into active cart |
-| `/verify-bill` | `POST` | Verify customer info & payment mode |
-| `/checkout` | `GET` | Finalize sale, decrement stock, generate PDF invoice |
-| `/bill/<invoice_no>` | `GET` | View formatted HTML bill in browser |
-| `/bill/<invoice_no>/pdf` | `GET` | Download generated PDF invoice file |
-| `/bills` | `GET`, `POST` | Invoice history list with search filtering |
-| `/purchase` | `GET` | Supplier purchase entry screen |
-| `/get-items/<category>` | `GET` | JSON endpoint returning products for purchase category |
-| `/purchase/save` | `POST` | Record purchase bill & increment inventory stock |
-| `/purchase/history` | `GET` | View and filter historical purchases by supplier/date |
-| `/products` | `GET`, `POST` | Product inventory table with inline quick updates |
-| `/products/form` | `GET` | Detailed product management form (create/edit) |
-| `/products/update` | `POST` | Save or update full product master details & images |
-| `/update-product/<item_code>` | `POST` | Quick inline price & stock updater |
-| `/delete-product/<item_code>` | `GET` | Remove a product from inventory |
-| `/product-image/<item_code>` | `GET` | Stream stored binary product image (`BYTEA`) |
-| `/reports` | `GET`, `POST` | Sales analytics with date range filters |
-| `/z-report` | `GET`, `POST` | Daily closing Z-Report generation & thermal print |
+### Analytics & Reports
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/reports` | Sales volume and category distribution over date range |
+| `GET` | `/api/z-report` | Retrieve daily Z-Report settlement for a date |
+| `POST` | `/api/z-report/generate` | Generate and freeze end-of-day register closing |
 
 ---
 
-## 🔒 Configuration & Production Deployment
+## 🔒 Production Deployment
 
-### 1. Secret Key Security
-In `app.py`, change the default secret key to a cryptographically secure random string:
-```python
-import os
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-secure-random-key-here")
+### 1. Build the React Frontend
+Compile the production static assets:
+```bash
+cd frontend
+npm run build
 ```
+The compiled SPA will output to `frontend/dist/`.
 
-### 2. Running Behind a Production WSGI Server
-Do not use `app.run(debug=True)` in production. Instead, run with a production WSGI server:
+### 2. WSGI Server Configuration
 
-**Using Waitress (Recommended for Windows):**
+Never run `app.run(debug=True)` in a live production environment.
+
+**Windows Server (Waitress):**
 ```bash
 pip install waitress
-waitress-serve --port=5000 app:app
+waitress-serve --port=5000 --threads=8 app:app
 ```
 
-**Using Gunicorn (for Linux servers):**
+**Linux / Cloud Server (Gunicorn + Nginx):**
 ```bash
 pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+gunicorn -w 4 -b 127.0.0.1:5000 --access-logfile - --error-logfile - app:app
+```
+
+### 3. Sample Nginx Reverse Proxy
+```nginx
+server {
+    listen 80;
+    server_name erp.yourdomain.com;
+
+    location / {
+        root /var/www/pandass/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /static/invoices/ {
+        alias /var/www/pandass/static/invoices/;
+        expires 30d;
+    }
+}
 ```
 
 ---
 
-## ❓ Troubleshooting & FAQ
+## 🧪 Unit & Regression Testing
 
-### 1. `psycopg2.OperationalError: connection to server at "localhost" failed`
-- **Cause:** PostgreSQL service is stopped or port `5432` is blocked.
-- **Solution:** Verify the PostgreSQL service is running:
-  - *Windows:* Open `services.msc` and check that `postgresql-x64-XX` is running.
-  - *Linux:* Run `sudo systemctl status postgresql`.
-- Check credentials in `db.py`.
+PANDAS includes built-in verification covering critical workflows:
+* **Unit Validation**: Verified in [unitValidation.js](file:///frontend/src/utils/unitValidation.js) ensuring strict integer rules for discrete items and high-precision floats for bulk items.
+* **Purchase Status Decoupling**: Verified that creating `Pending Receipt` consignments does not increment inventory until physical receipt is confirmed.
+* **Sequential Invoice Integrity**: Automated format checks on `INV-YYYY-XXXXX`.
+* **Frontend Production Build**: Tested with zero compilation or TypeScript/JSX bundle errors.
 
-### 2. `PermissionError: [WinError 5] Access is denied: 'static/invoices/...'`
-- **Cause:** Flask lacks write permissions to write the generated PDF invoices.
-- **Solution:** Ensure the user running Python has write permissions on the `static/invoices` folder.
-
-### 3. xhtml2pdf styling looks different than HTML
-- **Note:** `xhtml2pdf` supports a subset of CSS2. Avoid advanced CSS Flexbox or Grid properties inside `bill.html`; standard HTML tables (`<table>`) are recommended for PDF rendering consistency.
+Run frontend build verification at any time:
+```bash
+cd frontend
+npm run build
+```
 
 ---
 
-## 🔮 Future Roadmap
+## 🤝 Contributing
 
-- [ ] **Role-Based Access Control (RBAC):** Admin, Manager, and Cashier permission tiers.
-- [ ] **Barcode Scanner Support:** Instant item addition via USB/Bluetooth barcode readers.
-- [ ] **Thermal ESC/POS Direct Printing:** Network socket printing directly to thermal receipt printers (80mm/58mm).
-- [ ] **Customer Loyalty & Ledger:** Track customer credits and loyalty reward points.
-- [ ] **Automated Low-Stock Alerts:** Email/SMS notifications when inventory falls below minimum reorder levels.
+Contributions, feature requests, and issue reports are welcome!
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-This software is developed for proprietary retail and Point of Sale management. All rights reserved.
+This software is developed and distributed under proprietary commercial licensing for retail operations. All rights reserved.
 
+<div align="center">
+  <sub>Engineered with precision for modern retail businesses.</sub>
+</div>

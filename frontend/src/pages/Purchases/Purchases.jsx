@@ -16,10 +16,11 @@ import {
   CreditCard,
   Building
 } from 'lucide-react';
-import { purchasesApi } from '../../services/api';
+import { purchasesApi, suppliersApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Loading } from '../../components/common/Loading';
 import { Badge } from '../../components/common/Badge';
+import { Modal } from '../../components/common/Modal';
 import { isIntegerUnit, validateUnitQuantity, formatQuantity } from '../../utils/unitValidation';
 
 export const Purchases = () => {
@@ -28,6 +29,19 @@ export const Purchases = () => {
 
   const [categories, setCategories] = useState([]);
   const [supplierName, setSupplierName] = useState('');
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [supplierSuggestions, setSupplierSuggestions] = useState([]);
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [showQuickSupplierModal, setShowQuickSupplierModal] = useState(false);
+  const [quickSupplierForm, setQuickSupplierForm] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    tax_number: '',
+    address: '',
+  });
+  const [savingQuickSupplier, setSavingQuickSupplier] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Concept A: Goods Receipt Status ('Pending Receipt' | 'Received' | 'Verified' | 'Partially Received')
@@ -132,6 +146,60 @@ export const Purchases = () => {
 
   const balanceDue = Math.max(0, grandTotal - effectivePaidAmount);
 
+  const handleSupplierSearch = async (query) => {
+    setSupplierName(query);
+    setSelectedSupplierId('');
+    if (!query.trim() || query.length < 2) {
+      setSupplierSuggestions([]);
+      setShowSupplierDropdown(false);
+      return;
+    }
+    try {
+      const res = await suppliersApi.search(query);
+      setSupplierSuggestions(res.data || []);
+      setShowSupplierDropdown((res.data || []).length > 0);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelectSupplier = (s) => {
+    setSupplierName(s.name);
+    setSelectedSupplierId(s.supplier_id);
+    setShowSupplierDropdown(false);
+    toast.info(`Supplier ${s.name} (${s.supplier_id}) selected`);
+  };
+
+  const handleQuickRegisterSupplier = async (e) => {
+    e.preventDefault();
+    if (!quickSupplierForm.name.trim()) {
+      toast.error('Supplier name is required');
+      return;
+    }
+    try {
+      setSavingQuickSupplier(true);
+      const res = await suppliersApi.create(quickSupplierForm);
+      const newSup = res.data;
+      setSupplierName(newSup.name);
+      setSelectedSupplierId(newSup.supplier_id);
+      setShowQuickSupplierModal(false);
+      setQuickSupplierForm({
+        name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        tax_number: '',
+        address: '',
+      });
+      toast.success(`Supplier ${newSup.name} (${newSup.supplier_id}) registered & selected!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to register supplier');
+    } finally {
+      setSavingQuickSupplier(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -150,6 +218,7 @@ export const Purchases = () => {
       setSubmitting(true);
       await purchasesApi.save({
         supplier_name: supplierName.trim(),
+        supplier_id: selectedSupplierId || null,
         purchase_date: purchaseDate,
         receipt_status: receiptStatus,
         payment_method: paymentMethod,
@@ -213,16 +282,69 @@ export const Purchases = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-slate-600 font-bold mb-1.5">Supplier / Vendor Name *</label>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-slate-600 font-bold">Supplier / Vendor Name *</label>
+                  {selectedSupplierId && (
+                    <span className="px-2 py-0.5 rounded-md bg-gold-100 text-[#111111] font-mono font-bold text-[10px] border border-gold-300">
+                      {selectedSupplierId}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedSupplierId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSupplierName('');
+                        setSelectedSupplierId('');
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickSupplierModal(true)}
+                    className="text-[11px] font-bold text-gold-700 hover:text-gold-800 bg-gold-50 hover:bg-gold-100 px-2 py-0.5 rounded-lg border border-gold-200 transition"
+                  >
+                    + Quick Add Vendor
+                  </button>
+                </div>
+              </div>
+
               <input
                 type="text"
-                placeholder="e.g. Metro Cash & Carry, Royal Dry Fruits Ltd"
+                placeholder="Type vendor name or search directory..."
                 value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
+                onChange={(e) => handleSupplierSearch(e.target.value)}
+                onFocus={() => supplierSuggestions.length > 0 && setShowSupplierDropdown(true)}
                 required
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
               />
+
+              {/* Typeahead Suggestions Dropdown */}
+              {showSupplierDropdown && supplierSuggestions.length > 0 && (
+                <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
+                  {supplierSuggestions.map((s) => (
+                    <div
+                      key={s.supplier_id}
+                      onClick={() => handleSelectSupplier(s)}
+                      className="p-2.5 hover:bg-gold-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900">{s.name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {s.supplier_id} {s.contact_person ? `• ${s.contact_person}` : ''} {s.phone ? `• ${s.phone}` : ''}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-gold-600 font-bold">Select Vendor</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -541,6 +663,91 @@ export const Purchases = () => {
           </div>
         </div>
       </form>
+
+      {/* Quick Supplier Registration Modal */}
+      <Modal
+        isOpen={showQuickSupplierModal}
+        onClose={() => setShowQuickSupplierModal(false)}
+        title="Quick Vendor / Supplier Registration"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleQuickRegisterSupplier} className="space-y-3.5 text-xs">
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Company / Supplier Name *</label>
+            <input
+              type="text"
+              placeholder="e.g. Royal Dry Fruits Ltd"
+              value={quickSupplierForm.name}
+              onChange={(e) => setQuickSupplierForm({ ...quickSupplierForm, name: e.target.value })}
+              required
+              autoFocus
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Contact Person (Optional)</label>
+            <input
+              type="text"
+              placeholder="Vendor rep name"
+              value={quickSupplierForm.contact_person}
+              onChange={(e) => setQuickSupplierForm({ ...quickSupplierForm, contact_person: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-slate-600 font-bold mb-1">Phone Number</label>
+              <input
+                type="text"
+                placeholder="Mobile / Office"
+                value={quickSupplierForm.phone}
+                onChange={(e) => setQuickSupplierForm({ ...quickSupplierForm, phone: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-600 font-bold mb-1">GSTIN (Optional)</label>
+              <input
+                type="text"
+                placeholder="Tax ID"
+                value={quickSupplierForm.tax_number}
+                onChange={(e) => setQuickSupplierForm({ ...quickSupplierForm, tax_number: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-mono uppercase text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Address / City</label>
+            <input
+              type="text"
+              placeholder="Warehouse / Office address"
+              value={quickSupplierForm.address}
+              onChange={(e) => setQuickSupplierForm({ ...quickSupplierForm, address: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowQuickSupplierModal(false)}
+              className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingQuickSupplier}
+              className="px-4 py-2 bg-[#F5B900] hover:bg-[#E5AC00] text-[#111111] font-black rounded-xl text-xs shadow-sm transition active:scale-95 disabled:opacity-50"
+            >
+              {savingQuickSupplier ? 'Registering...' : 'Register & Select'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

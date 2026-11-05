@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Calendar, ShieldCheck, ShoppingCart, Bell, User } from 'lucide-react';
+import { Calendar, ShieldCheck, ShoppingCart, Bell, User, Lock, Unlock } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const routeTitles = {
   '/': 'Dashboard Overview',
@@ -15,6 +16,7 @@ const routeTitles = {
 
 export const Header = ({ collapsed }) => {
   const location = useLocation();
+  const { isAdmin, mode, openLoginModal, lockAdmin } = useAuth();
   const currentTitle = routeTitles[location.pathname] || 'PANDAS ERP';
 
   const todayStr = new Date().toLocaleDateString('en-GB', {
@@ -35,6 +37,29 @@ export const Header = ({ collapsed }) => {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Mode Pill & Toggle */}
+        {isAdmin ? (
+          <button
+            onClick={lockAdmin}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 text-xs font-bold transition group"
+            title="Click to lock Admin Mode and return to Cashier Mode"
+          >
+            <ShieldCheck className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Admin Mode</span>
+            <Lock className="w-3.5 h-3.5 ml-1 opacity-70 group-hover:opacity-100" />
+          </button>
+        ) : (
+          <button
+            onClick={openLoginModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 text-xs font-bold transition group"
+            title="Click to enter Admin password"
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-400" />
+            <span className="hidden sm:inline">Cashier Mode</span>
+            <Unlock className="w-3.5 h-3.5 ml-1 text-[#F5B900] opacity-80 group-hover:opacity-100" />
+          </button>
+        )}
+
         {/* POS Register shortcut */}
         <Link
           to="/billing"

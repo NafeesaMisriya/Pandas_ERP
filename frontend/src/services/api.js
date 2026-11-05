@@ -66,4 +66,63 @@ export const zReportApi = {
   generate: (report_date) => api.post('/z-report/generate', { report_date }),
 };
 
+export const customersApi = {
+  list: (params) => api.get('/customers', { params }),
+  search: (q) => api.get('/customers/search', { params: { q } }),
+  get: (id) => api.get(`/customers/${id}`),
+  create: (data) => api.post('/customers', data),
+  update: (id, data) => api.put(`/customers/${id}`, data),
+};
+
+export const suppliersApi = {
+  list: (params) => api.get('/suppliers', { params }),
+  search: (q) => api.get('/suppliers/search', { params: { q } }),
+  get: (id) => api.get(`/suppliers/${id}`),
+  create: (data) => api.post('/suppliers', data),
+  update: (id, data) => api.put(`/suppliers/${id}`, data),
+};
+
+export const inventoryApi = {
+  getStatus: () => api.get('/inventory/status'),
+  getAlerts: (params) => api.get('/inventory/alerts', { params }),
+  getReorderSuggestions: (params) => api.get('/inventory/reorder-suggestions', { params }),
+  getMovements: (params) => api.get('/inventory/movements', { params }),
+  adjust: (data) => api.post('/inventory/adjust', data),
+};
+
+export const expensesApi = {
+  getCategories: () => api.get('/expenses/categories'),
+  addCategory: (data) => api.post('/expenses/categories', data),
+  list: (params) => api.get('/expenses', { params }),
+  get: (id) => api.get(`/expenses/${id}`),
+  create: (data) => api.post('/expenses', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  update: (id, data) => api.put(`/expenses/${id}`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  delete: (id) => api.delete(`/expenses/${id}`),
+  report: (params) => api.get('/expenses/report', { params }),
+};
+
+export const profitApi = {
+  summary: (params) => api.get('/profit/summary', { params }),
+  report: (params) => api.get('/profit/report', { params }),
+};
+
+export const payablesApi = {
+  getSummary: () => api.get('/payables/summary'),
+  getSuppliers: (params) => api.get('/payables/suppliers', { params }),
+  getPurchases: (params) => api.get('/payables/purchases', { params }),
+  getPurchaseDetail: (id) => api.get(`/payables/purchases/${id}`),
+  recordPayment: (data) => api.post('/payables/payments', data),
+  updateDueDate: (id, data) => api.post(`/payables/purchases/${id}/due-date`, data),
+};
+
+export const authApi = {
+  getStatus: () => api.get('/auth/status'),
+  unlockAdmin: (password) => api.post('/auth/unlock-admin', { password }),
+  lockAdmin: () => api.post('/auth/lock-admin'),
+};
+
 export default api;
