@@ -31,13 +31,6 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
-// Index route router: Redirects Cashier to /billing, Admin to /dashboard
-const IndexRoute = () => {
-  const { isAdmin, loading } = useAuth();
-  if (loading) return null;
-  return isAdmin ? <Dashboard /> : <Navigate to="/billing" replace />;
-};
-
 export const App = () => {
   return (
     <ToastProvider>
@@ -45,21 +38,21 @@ export const App = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Layout />}>
-              <Route index element={<IndexRoute />} />
+              <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="billing" element={<Billing />} />
+              <Route path="products" element={<Products />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="purchases" element={<Purchases />} />
+              <Route path="purchases/history" element={<PurchaseHistory />} />
               <Route path="bills" element={<Bills />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="suppliers" element={<Suppliers />} />
 
               {/* Admin Protected Routes */}
-              <Route path="dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
-              <Route path="products" element={<AdminRoute><Products /></AdminRoute>} />
-              <Route path="inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
-              <Route path="purchases" element={<AdminRoute><Purchases /></AdminRoute>} />
-              <Route path="purchases/history" element={<AdminRoute><PurchaseHistory /></AdminRoute>} />
               <Route path="payables" element={<AdminRoute><Payables /></AdminRoute>} />
               <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
               <Route path="z-report" element={<AdminRoute><ZReport /></AdminRoute>} />
-              <Route path="customers" element={<AdminRoute><Customers /></AdminRoute>} />
-              <Route path="suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
               <Route path="expenses" element={<AdminRoute><Expenses /></AdminRoute>} />
               <Route path="profit-loss" element={<AdminRoute><ProfitLoss /></AdminRoute>} />
 

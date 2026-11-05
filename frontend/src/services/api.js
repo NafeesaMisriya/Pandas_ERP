@@ -39,11 +39,21 @@ export const billingApi = {
   setCustomer: (customer) => api.post('/billing/customer', customer),
   holdBill: () => api.post('/billing/hold'),
   resumeBill: (holdId) => api.post(`/billing/resume/${holdId}`),
+  setDiscount: (data) => api.post('/billing/discount', data),
+  clearDiscount: () => api.post('/billing/discount', { type: null, value: 0 }),
   checkout: (data) => api.post('/billing/checkout', data),
 };
 
 export const billsApi = {
-  list: (search) => api.get('/bills', { params: { search } }),
+  list: (params) => {
+    const config = {};
+    if (typeof params === 'string') {
+      config.params = { search: params };
+    } else if (params) {
+      config.params = params;
+    }
+    return api.get('/bills', config);
+  },
   get: (invoiceNo) => api.get(`/bills/${invoiceNo}`),
   cancel: (invoiceNo) => api.post(`/bills/${invoiceNo}/cancel`),
 };

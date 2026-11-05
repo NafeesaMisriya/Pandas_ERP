@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   FileText,
@@ -12,7 +12,12 @@ import {
   X,
   CreditCard,
   DollarSign,
-  Smartphone
+  Smartphone,
+  Phone,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Filter
 } from 'lucide-react';
 import { billsApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -26,28 +31,153 @@ export const Bills = () => {
   const [bills, setBills] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [dateFilterType, setDateFilterType] = useState('all'); // 'all' | 'single' | 'range'
+  const [singleDate, setSingleDate] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(15);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Selected bill modal
   const [selectedBill, setSelectedBill] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const fetchBills = async () => {
+  const fetchBills = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await billsApi.list(searchTerm);
-      setBills(res.data || []);
+      const params = {
+        page,
+        page_size: pageSize,
+      };
+
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+
+      if (paymentFilter !== 'ALL') {
+        params.payment_mode = paymentFilter;
+      }
+
+      if (dateFilterType === 'single' && singleDate) {
+        params.date = singleDate;
+      } else if (dateFilterType === 'range') {
+        if (fromDate) params.from_date = fromDate;
+        if (toDate) params.to_date = toDate;
+      }
+
+      const res = await billsApi.list(params);
+      const data = res.data;
+
+      if (Array.isArray(data)) {
+        setBills(data);
+        setTotalCount(data.length);
+        setTotalPages(1);
+      } else {
+        setBills(data.bills || []);
+        setTotalCount(data.total || 0);
+        setTotalPages(data.total_pages || 1);
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to load invoices');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, searchTerm, paymentFilter, dateFilterType, singleDate, fromDate, toDate, toast]);
 
   useEffect(() => {
     fetchBills();
-  }, [searchTerm]);
+  }, [fetchBills]);
+
+  const handleSearchChange = (val) => {
+    setSearchTerm(val);
+    setPage(1);
+  };
+
+  const handlePaymentFilterChange = (mode) => {
+    setPaymentFilter(mode);
+    setPage(1);
+  };
+
+  const handleDateFilterTypeChange = (type) => {
+    setDateFilterType(type);
+    setPage(1);
+  };
+
+  const handleSingleDateChange = (date) => {
+    setSingleDate(date);
+    setPage(1);
+  };
+
+  const handleFromDateChange = (date) => {
+    setFromDate(date);
+    setPage(1);
+  };
+
+  const handleToDateChange = (date) => {
+    setToDate(date);
+    setPage(1);
+  };
+
+  // Quick Date Presets
+  const setQuickToday = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setDateFilterType('single');
+    setSingleDate(today);
+    setPage(1);
+  };
+
+  const setQuickYesterday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yesterday = d.toISOString().split('T')[0];
+    setDateFilterType('single');
+    setSingleDate(yesterday);
+    setPage(1);
+  };
+
+  const setQuickLast7Days = () => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+    setDateFilterType('range');
+    setFromDate(start.toISOString().split('T')[0]);
+    setToDate(end.toISOString().split('T')[0]);
+    setPage(1);
+  };
+
+  const setQuickThisMonth = () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const today = now.toISOString().split('T')[0];
+    setDateFilterType('range');
+    setFromDate(firstDay);
+    setToDate(today);
+    setPage(1);
+  };
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setPaymentFilter('ALL');
+    setDateFilterType('all');
+    setSingleDate('');
+    setFromDate('');
+    setToDate('');
+    setPage(1);
+  };
+
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) ||
+    paymentFilter !== 'ALL' ||
+    (dateFilterType === 'single' && Boolean(singleDate)) ||
+    (dateFilterType === 'range' && (Boolean(fromDate) || Boolean(toDate))) ||
+    dateFilterType !== 'all';
 
   const handleViewBill = async (invoiceNo) => {
     try {
@@ -78,14 +208,9 @@ export const Bills = () => {
     }
   };
 
-  const filteredBills = bills.filter((b) => {
-    if (paymentFilter === 'ALL') return true;
-    return b.payment_mode === paymentFilter;
-  });
-
   return (
-    <div className="space-y-6 animate-fadeIn pb-8">
-      {/* Context Breadcrumb & Search */}
+    <div className="space-y-5 animate-fadeIn pb-8">
+      {/* Context Breadcrumb & Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
@@ -93,55 +218,239 @@ export const Bills = () => {
             <span className="text-slate-300">•</span>
             <span className="text-[#F5B900] font-bold">Invoices &amp; Receipts</span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">Search customer transactions, open archived PDF bills, and audit register slips</p>
+          <p className="text-xs text-slate-500 mt-1">Search customer transactions, filter by date, open archived PDF bills, and audit register slips</p>
         </div>
 
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search invoice # or customer..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs font-medium"
-          />
-          {searchTerm && (
+        {/* Global Summary Badge */}
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200/80">
+            Total Invoices: <span className="text-[#111111] font-black">{totalCount}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Main Filter & Search Console */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-3.5">
+        {/* Top Filter Row: Search & Date Filter Mode Toggle */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Universal Search Input */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by Invoice ID, Customer Name, or Phone..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs font-medium transition"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Date Filter Type Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl text-xs shrink-0 self-start lg:self-auto border border-slate-200/60">
             <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              onClick={() => handleDateFilterTypeChange('all')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition active:scale-95 ${
+                dateFilterType === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
+              All Dates
+            </button>
+            <button
+              onClick={() => handleDateFilterTypeChange('single')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition active:scale-95 ${
+                dateFilterType === 'single'
+                  ? 'bg-[#F5B900] text-[#111111] shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Specific Date
+            </button>
+            <button
+              onClick={() => handleDateFilterTypeChange('range')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition active:scale-95 ${
+                dateFilterType === 'range'
+                  ? 'bg-[#F5B900] text-[#111111] shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Date Range
+            </button>
+          </div>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="px-3.5 py-2 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl border border-rose-200 transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 shadow-xs"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Filters</span>
             </button>
           )}
         </div>
-      </div>
 
-      {/* Payment Mode Filter Pills */}
-      <div className="bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-400 font-bold px-2 uppercase tracking-wider text-[11px]">Payment:</span>
-        {['ALL', 'Cash', 'UPI', 'Card'].map((mode) => (
-          <button
-            key={mode}
-            onClick={() => setPaymentFilter(mode)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 ${
-              paymentFilter === mode
-                ? 'bg-[#F5B900] text-[#111111] shadow-sm font-black'
-                : 'bg-slate-100/80 text-slate-600 hover:bg-gold-50/60 hover:text-slate-900'
-            }`}
-          >
-            {mode === 'ALL' ? 'All Invoices' : mode}
-          </button>
-        ))}
+        {/* Date Selection Panel (When Single Date or Date Range is active) */}
+        {dateFilterType === 'single' && (
+          <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2.5 text-xs animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-bold flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-[#F5B900]" />
+                Invoice Date:
+              </span>
+              <input
+                type="date"
+                value={singleDate}
+                onChange={(e) => handleSingleDateChange(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              />
+              {singleDate && (
+                <button
+                  onClick={() => handleSingleDateChange('')}
+                  className="text-slate-400 hover:text-slate-600 text-xs p-1"
+                  title="Clear date"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick:</span>
+              <button
+                onClick={setQuickToday}
+                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-gold-50 hover:text-slate-900 text-slate-600 rounded-lg transition"
+              >
+                Today
+              </button>
+              <button
+                onClick={setQuickYesterday}
+                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-gold-50 hover:text-slate-900 text-slate-600 rounded-lg transition"
+              >
+                Yesterday
+              </button>
+            </div>
+          </div>
+        )}
+
+        {dateFilterType === 'range' && (
+          <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-bold flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-[#F5B900]" />
+                From Date:
+              </span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => handleFromDateChange(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-bold">To Date:</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => handleToDateChange(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              />
+              {(fromDate || toDate) && (
+                <button
+                  onClick={() => { setFromDate(''); setToDate(''); setPage(1); }}
+                  className="text-slate-400 hover:text-slate-600 text-xs p-1"
+                  title="Clear range"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick:</span>
+              <button
+                onClick={setQuickToday}
+                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-gold-50 hover:text-slate-900 text-slate-600 rounded-lg transition"
+              >
+                Today
+              </button>
+              <button
+                onClick={setQuickLast7Days}
+                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-gold-50 hover:text-slate-900 text-slate-600 rounded-lg transition"
+              >
+                Last 7 Days
+              </button>
+              <button
+                onClick={setQuickThisMonth}
+                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-gold-50 hover:text-slate-900 text-slate-600 rounded-lg transition"
+              >
+                This Month
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Filter Row: Payment Mode Filter Pills */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-400 font-bold px-1 uppercase tracking-wider text-[11px]">Payment:</span>
+            {['ALL', 'Cash', 'UPI', 'Card'].map((mode) => (
+              <button
+                key={mode}
+                onClick={() => handlePaymentFilterChange(mode)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition active:scale-95 ${
+                  paymentFilter === mode
+                    ? 'bg-[#F5B900] text-[#111111] shadow-xs font-black'
+                    : 'bg-slate-100 text-slate-600 hover:bg-gold-50 hover:text-slate-900'
+                }`}
+              >
+                {mode === 'ALL' ? 'All Methods' : mode}
+              </button>
+            ))}
+          </div>
+
+          {/* Active Results Metric */}
+          <div className="text-[11px] text-slate-400 font-semibold">
+            Showing <span className="text-slate-800 font-bold">{bills.length}</span> of{' '}
+            <span className="text-slate-800 font-bold">{totalCount}</span> filtered invoices
+          </div>
+        </div>
       </div>
 
       {/* Invoices Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col">
         {loading ? (
-          <Loading text="Loading sales invoices..." fullHeight />
-        ) : filteredBills.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 text-sm">
-            <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+          <div className="py-20">
+            <Loading text="Loading sales invoices..." />
+          </div>
+        ) : bills.length === 0 ? (
+          <div className="py-20 text-center text-slate-400 text-sm space-y-3">
+            <FileText className="w-10 h-10 mx-auto text-slate-300" />
             <p className="font-bold text-slate-700 text-sm">No invoices found matching your query.</p>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Try adjusting your search terms, changing the date range, or resetting filters.
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-[#F5B900] text-[#111111] rounded-xl hover:bg-[#E5AC00] transition active:scale-95"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset All Filters</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -149,7 +458,7 @@ export const Bills = () => {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3.5 px-4">Invoice No</th>
-                  <th className="py-3.5 px-4">Customer Name</th>
+                  <th className="py-3.5 px-4">Customer Details</th>
                   <th className="py-3.5 px-4">Date &amp; Time</th>
                   <th className="py-3.5 px-4">Payment Mode</th>
                   <th className="py-3.5 px-4">Total Amount (₹)</th>
@@ -158,7 +467,7 @@ export const Bills = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredBills.map((b) => (
+                {bills.map((b) => (
                   <tr key={b.invoice_no} className="hover:bg-gold-50/40 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
                       <button
@@ -168,8 +477,14 @@ export const Bills = () => {
                         {b.invoice_no}
                       </button>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">
-                      {b.customer_name}
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-slate-800">{b.customer_name}</div>
+                      {b.customer_phone ? (
+                        <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{b.customer_phone}</span>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 font-medium">{b.created_at}</td>
                     <td className="py-3.5 px-4">
@@ -234,6 +549,47 @@ export const Bills = () => {
             </table>
           </div>
         )}
+
+        {/* Server-Side Pagination Bar */}
+        {totalCount > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50 text-xs">
+            <span className="text-slate-500 font-medium">
+              Showing{' '}
+              <span className="font-bold text-slate-800">
+                {Math.min((page - 1) * pageSize + 1, totalCount)}
+              </span>
+              –
+              <span className="font-bold text-slate-800">
+                {Math.min(page * pageSize, totalCount)}
+              </span>{' '}
+              of <span className="font-bold text-slate-800">{totalCount}</span> invoices
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs transition active:scale-95"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+
+              <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 font-bold text-slate-800 shadow-xs">
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs transition active:scale-95"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bill Detail Modal (Customer-facing invoice document uses logob.png) */}
@@ -264,7 +620,9 @@ export const Bills = () => {
                   {selectedBill.customer_name}
                 </h4>
                 {selectedBill.customer_phone && (
-                  <p className="text-slate-500 text-[11px]">Phone: {selectedBill.customer_phone}</p>
+                  <p className="text-slate-500 text-[11px] font-mono mt-0.5">
+                    Phone: {selectedBill.customer_phone}
+                  </p>
                 )}
                 <p className="text-slate-400 text-[11px] mt-1">Date: {selectedBill.created_at}</p>
               </div>
