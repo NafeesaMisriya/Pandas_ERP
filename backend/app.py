@@ -159,7 +159,7 @@ def calculate_cart_totals(cart, bill_discount=None):
     Computes subtotal, discount_amount, and final_payable from cart items and discount settings.
     Authoritative server-side calculation logic.
     """
-    subtotal = sum(Decimal(str(item.get("total", 0))) for item in cart)
+    subtotal = sum((Decimal(str(item.get("total", 0))) for item in cart), Decimal("0"))
     subtotal = subtotal.quantize(Decimal("0.01"))
 
     if not bill_discount or not isinstance(bill_discount, dict):

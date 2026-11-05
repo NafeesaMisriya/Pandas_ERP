@@ -174,16 +174,8 @@ export const Billing = () => {
     try {
       const res = await billingApi.removeItem(index);
       syncCartResponse(res.data);
-      setQtyInputs((prev) => {
-        const copy = { ...prev };
-        delete copy[index];
-        return copy;
-      });
-      setTargetAmounts((prev) => {
-        const copy = { ...prev };
-        delete copy[index];
-        return copy;
-      });
+      setQtyInputs({});
+      setTargetAmounts({});
       toast.info('Item removed from cart');
     } catch (err) {
       console.error(err);
@@ -676,8 +668,13 @@ export const Billing = () => {
                         ₹{item.total.toFixed(2)}
                       </div>
                       <button
-                        onClick={() => handleRemoveItem(index)}
-                        className="text-slate-300 hover:text-rose-600 mt-1 transition-colors"
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveItem(index);
+                        }}
+                        className="p-1 text-slate-300 hover:text-rose-600 mt-1 transition-colors rounded hover:bg-rose-50"
                         title="Remove item"
                       >
                         <Trash2 className="w-3.5 h-3.5 ml-auto" />
