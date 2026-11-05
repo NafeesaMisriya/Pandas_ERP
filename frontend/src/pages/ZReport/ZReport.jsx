@@ -7,7 +7,10 @@ import {
   CheckCircle2,
   Calendar,
   ShieldCheck,
-  DollarSign
+  DollarSign,
+  TrendingDown,
+  TrendingUp,
+  Receipt
 } from 'lucide-react';
 import { zReportApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -61,19 +64,18 @@ export const ZReport = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header & Controls (hidden during print) */}
-      <div className="no-print bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600">
-            <CalendarCheck className="w-5 h-5" />
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Context Breadcrumb & Controls (hidden during print) */}
+      <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <span>Accounting</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[#F5B900] font-bold">Daily Settlement</span>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Daily Z-Report & End-of-Day Settlement</h2>
-            <p className="text-xs text-slate-500">
-              Audit lock, payment channel reconciliations, and thermal cash drawer slip
-            </p>
-          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Audit lock, payment channel reconciliations, and thermal register closure receipt
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -81,14 +83,14 @@ export const ZReport = () => {
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
           />
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-navy-900 hover:bg-navy-800 text-white rounded-xl shadow-md transition"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-[#F5B900] hover:bg-[#E5AC00] text-[#111111] rounded-xl shadow-xs transition active:scale-95"
           >
-            <Printer className="w-4 h-4 text-emerald-400" />
+            <Printer className="w-4 h-4 text-[#111111]" />
             <span>Print Receipt Slip</span>
           </button>
         </div>
@@ -98,9 +100,9 @@ export const ZReport = () => {
         <Loading text="Retrieving financial settlement data..." fullHeight />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Settlement Dashboard */}
+          {/* Left Column (7 cols): Settlement Dashboard */}
           <div className="no-print lg:col-span-7 space-y-4">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs space-y-6">
               {/* Status Header */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div>
@@ -111,10 +113,10 @@ export const ZReport = () => {
                     {report?.already_generated ? (
                       <>
                         <Badge variant="success" size="lg">
-                          <Lock className="w-3.5 h-3.5 mr-1" /> Locked & Settled
+                          <Lock className="w-3.5 h-3.5 mr-1" /> Locked &amp; Settled
                         </Badge>
-                        <span className="text-xs text-slate-500">
-                          (Archived snapshot in z_reports)
+                        <span className="text-xs text-slate-500 font-medium">
+                          (Archived snapshot in PostgreSQL)
                         </span>
                       </>
                     ) : (
@@ -122,8 +124,8 @@ export const ZReport = () => {
                         <Badge variant="warning" size="lg">
                           <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Open / Unsettled
                         </Badge>
-                        <span className="text-xs text-slate-500">
-                          (Live draft before end-of-day closure)
+                        <span className="text-xs text-slate-500 font-medium">
+                          (Live draft before end-of-day register closure)
                         </span>
                       </>
                     )}
@@ -134,7 +136,7 @@ export const ZReport = () => {
                   <button
                     onClick={handleGenerate}
                     disabled={generating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-700/20 transition disabled:opacity-50"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gold-500 hover:bg-gold-400 text-navy-900 font-bold text-xs rounded-xl shadow-md shadow-gold-500/20 transition disabled:opacity-50 active:scale-95"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>{generating ? 'Closing Day...' : 'Generate & Close Day'}</span>
@@ -145,78 +147,75 @@ export const ZReport = () => {
               {/* Key Figures Grid */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                     Gross Register Sales
                   </span>
                   <p className="text-2xl font-black text-slate-900 mt-1">
                     ₹{(report?.gross_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </p>
                   <span className="text-[11px] text-slate-400 font-medium">
-                    {report?.total_bills || 0} valid bills
+                    {report?.total_bills || 0} valid customer bills
                   </span>
                 </div>
 
                 <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <span className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider">
-                    Net Settled Sales
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                    Net Settleable Sales
                   </span>
-                  <p className="text-2xl font-black text-emerald-900 mt-1">
+                  <p className="text-2xl font-black text-emerald-700 mt-1">
                     ₹{(report?.net_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[11px] text-emerald-700 font-medium">
-                    (Gross minus Cancelled)
+                  <span className="text-[11px] text-emerald-600 font-medium">
+                    Gross sales minus cancellations
                   </span>
                 </div>
               </div>
 
-              {/* Payment Mode Reconciliations */}
+              {/* Payment Channel Breakdown */}
               <div className="space-y-3 pt-2">
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
-                  Payment Mode Reconciliations
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Payment Channels Reconciliation
                 </h4>
 
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="font-semibold text-slate-700">Cash Register Inflow</span>
-                    <span className="font-bold text-slate-900 text-sm">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                    <span className="text-[11px] text-slate-500 font-bold block">Cash Register</span>
+                    <span className="text-base font-black text-slate-900 mt-0.5 block">
                       ₹{(report?.cash_sales || 0).toFixed(2)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="font-semibold text-slate-700">UPI / QR Digital Transfers</span>
-                    <span className="font-bold text-slate-900 text-sm">
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                    <span className="text-[11px] text-slate-500 font-bold block">UPI / QR Transfers</span>
+                    <span className="text-base font-black text-slate-900 mt-0.5 block">
                       ₹{(report?.upi_sales || 0).toFixed(2)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="font-semibold text-slate-700">POS Card Swipes / Terminal</span>
-                    <span className="font-bold text-slate-900 text-sm">
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                    <span className="text-[11px] text-slate-500 font-bold block">Card POS Terminal</span>
+                    <span className="text-base font-black text-slate-900 mt-0.5 block">
                       ₹{(report?.card_sales || 0).toFixed(2)}
                     </span>
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-800">
-                    <span className="font-semibold">Cancelled / Voided Receipts</span>
-                    <span className="font-bold text-sm">
-                      -₹{(report?.cancelled_sales || 0).toFixed(2)}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 text-rose-800 text-xs">
+                  <span className="font-semibold">Cancelled / Voided Receipts:</span>
+                  <span className="font-black text-sm">
+                    -₹{(report?.cancelled_sales || 0).toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Thermal Paper Receipt Preview */}
+          {/* Right Column (5 cols): Thermal Paper Receipt Preview */}
           <div className="lg:col-span-5 flex justify-center">
             <div className="w-full max-w-sm bg-white p-6 rounded-2xl shadow-xl border border-slate-200 font-mono text-slate-900 text-xs leading-relaxed">
               <div className="text-center pb-3 border-b-2 border-dashed border-slate-300">
-                <img src="/logo.png" alt="PANDAS" className="h-10 mx-auto mb-1.5 object-contain" />
-                <h2 className="text-base font-extrabold tracking-widest uppercase">PANDAS</h2>
-                <p className="text-[11px] text-slate-800 font-bold">NUTS &amp; CHOCOLATES</p>
-                <p className="text-[10px] text-slate-500">Near Bus Stop, Kottappuram</p>
-                <p className="text-[10px] text-slate-500">Ph: +91-9847345005</p>
+                <img src="/logob.png" alt="PANDAS" className="h-10 mx-auto mb-1.5 object-contain" />
+                <p className="text-[10px] text-slate-500">Near Bus Stop, Kottappuram • +91-9847345005</p>
                 <p className="text-[10px] text-slate-700 font-bold mt-1.5 uppercase">DAILY Z-REPORT SETTLEMENT</p>
               </div>
 
@@ -277,9 +276,9 @@ export const ZReport = () => {
               <div className="no-print mt-6 pt-3 border-t border-slate-100 flex justify-center">
                 <button
                   onClick={handlePrint}
-                  className="w-full py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 bg-navy-900 text-gold-400 border border-gold-500/30 rounded-xl font-bold text-xs hover:bg-navy-800 transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
                 >
-                  <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                  <Printer className="w-3.5 h-3.5 text-gold-400" />
                   <span>Print Slip</span>
                 </button>
               </div>

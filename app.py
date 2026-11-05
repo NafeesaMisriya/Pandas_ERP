@@ -58,12 +58,94 @@ def safe_float(value, default=0.0):
     except (TypeError, ValueError):
         return default
 
+# ============================================================
+# UNIT-BASED QUANTITY VALIDATION (STRICT BUSINESS RULES)
+# ============================================================
+INTEGER_UNITS = {
+    'pc', 'pcs', 'piece', 'pieces',
+    'packet', 'packets', 'pkt', 'pkts',
+    'box', 'boxes',
+    'bottle', 'bottles',
+    'can', 'cans',
+    'unit', 'units',
+    'nos', 'no'
+}
+
+DECIMAL_UNITS = {
+    'kg', 'kilogram', 'kilograms',
+    'g', 'gm', 'gms', 'gram', 'grams',
+    'l', 'ltr', 'litre', 'litres', 'liter', 'liters',
+    'ml', 'millilitre', 'millilitres', 'milliliter', 'milliliters'
+}
+
+def is_integer_unit(unit: str) -> bool:
+    if not unit:
+        return False
+    return str(unit).strip().lower() in INTEGER_UNITS
+
+def validate_unit_quantity(quantity, unit: str):
+    """
+    Validates whether a given quantity adheres to the product's unit rules.
+    - Whole-number units (pcs, packets, boxes, units, bottles, cans) reject any fractional/decimal values.
+    - Weight/volume units (kg, g, l, ml) permit decimal precision.
+    Returns (is_valid: bool, error_message: str | None).
+    Never silently rounds or truncates invalid numbers.
+    """
+    if quantity is None or str(quantity).strip() == "":
+        return False, "Quantity is required and cannot be empty."
+    try:
+        val = float(quantity)
+    except (TypeError, ValueError):
+        return False, f"Quantity '{quantity}' is not a valid numeric value."
+
+    if val < 0:
+        return False, "Quantity cannot be negative."
+
+    if is_integer_unit(unit):
+        # Must be a whole number (e.g., 15 is valid, 15.5 or 15.25 is rejected)
+        if not val.is_integer():
+            return False, (
+                f"Product unit '{unit}' only accepts whole numbers. "
+                f"Value '{quantity}' is invalid because decimals/fractions are not allowed for this unit."
+            )
+    return True, None
+
+def ensure_purchase_schema(conn):
+    """Auto-migrate purchases table schema to support separate goods receipt and payment statuses."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS receipt_status VARCHAR(50) DEFAULT 'Received';
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'Paid';
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'Cash';
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(10, 2) DEFAULT 0.00;
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS receipt_date DATE;
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS verified_date DATE;
+                ALTER TABLE purchases ADD COLUMN IF NOT EXISTS stock_updated BOOLEAN DEFAULT TRUE;
+            """)
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        # Continue gracefully if migration already applied or connection issues
+        pass
+
 def json_serialize_value(val):
     if isinstance(val, (datetime, date)):
         return val.isoformat()
     if isinstance(val, Decimal):
         return float(val)
     return val
+
+def link_callback(uri, rel):
+    if uri.startswith("/static/"):
+        path = os.path.join(BASE_DIR, uri.lstrip("/"))
+        if os.path.exists(path):
+            return path
+    elif uri.startswith("static/"):
+        path = os.path.join(BASE_DIR, uri)
+        if os.path.exists(path):
+            return path
+    return uri
 
 # ----------------- HEALTH & SYSTEM API -----------------
 @app.route("/api/health")
@@ -93,12 +175,37 @@ def api_dashboard_stats():
     """)
     total_bills, total_sales = cur.fetchone()
 
+    # Purchase metrics
+    cur.execute("SELECT COUNT(*), COALESCE(SUM(total), 0) FROM purchases")
+    total_purchases_count, total_purchases_sum = cur.fetchone()
+
     # Product counts
     cur.execute("SELECT COUNT(*) FROM products")
     total_products = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM products WHERE stock <= 5")
+    cur.execute("SELECT COUNT(*) FROM products WHERE stock <= 0")
+    out_of_stock_count = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM products WHERE stock > 0 AND stock <= 5")
     low_stock_count = cur.fetchone()[0]
+
+    # Attention needed products (out of stock and low stock, up to 6 items)
+    cur.execute("""
+        SELECT item_code, item_name, category, stock, unit
+        FROM products
+        WHERE stock <= 5
+        ORDER BY stock ASC, item_name ASC
+        LIMIT 6
+    """)
+    critical_products = []
+    for r in cur.fetchall():
+        critical_products.append({
+            "item_code": r[0],
+            "item_name": r[1],
+            "category": r[2],
+            "stock": float(r[3]),
+            "unit": r[4] or "pc"
+        })
 
     # Recent bills (last 5)
     cur.execute("""
@@ -171,8 +278,12 @@ def api_dashboard_stats():
         "today_bills": today_bills,
         "total_sales": float(total_sales),
         "total_bills": total_bills,
+        "total_purchases_count": total_purchases_count,
+        "total_purchases_sum": float(total_purchases_sum),
         "total_products": total_products,
         "low_stock_count": low_stock_count,
+        "out_of_stock_count": out_of_stock_count,
+        "critical_products": critical_products,
         "recent_bills": recent_bills,
         "recent_purchases": recent_purchases,
         "category_sales": category_sales,
@@ -346,6 +457,10 @@ def api_create_product():
         errors["unit"] = "Unit is required"
     if sale_price is None or str(sale_price).strip() == "":
         errors["sale_price"] = "Valid sales price is required"
+    if unit and stock is not None:
+        valid_qty, err_qty = validate_unit_quantity(stock, unit)
+        if not valid_qty:
+            errors["stock"] = err_qty
 
     if errors:
         return jsonify({"error": "Validation failed", "details": errors}), 422
@@ -433,6 +548,10 @@ def api_update_product(item_code):
         errors["unit"] = "Unit is required"
     if sale_price is None or str(sale_price).strip() == "":
         errors["sale_price"] = "Valid sales price is required"
+    if unit and stock is not None:
+        valid_qty, err_qty = validate_unit_quantity(stock, unit)
+        if not valid_qty:
+            errors["stock"] = err_qty
 
     if errors:
         return jsonify({"error": "Validation failed", "details": errors}), 422
@@ -513,6 +632,17 @@ def api_quick_update_product(item_code):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        cur.execute("SELECT unit FROM products WHERE item_code=%s", (item_code,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": f"Product '{item_code}' not found"}), 404
+        unit = row[0]
+
+        if stock is not None:
+            valid_qty, err_qty = validate_unit_quantity(stock, unit)
+            if not valid_qty:
+                return jsonify({"error": err_qty, "field": "stock"}), 422
+
         cur.execute("""
             UPDATE products
             SET price = %s, stock = %s
@@ -712,12 +842,20 @@ def api_cart_add():
     price = Decimal(str(price))
     total = price * qty
 
+    # Strict Unit-based Quantity Validation
+    valid_qty, err_qty = validate_unit_quantity(quantity, unit)
+    if not valid_qty:
+        return jsonify({"error": err_qty}), 400
+
     # Check if item already in cart to increment or add new line
     found = False
     for item in session["cart"]:
         if item.get("code") == code:
             existing_qty = Decimal(str(item["qty"]))
             new_qty = existing_qty + qty
+            valid_combined, err_comb = validate_unit_quantity(new_qty, unit)
+            if not valid_combined:
+                return jsonify({"error": err_comb}), 400
             item["qty"] = float(new_qty)
             item["total"] = float(Decimal(str(item["price"])) * new_qty)
             found = True
@@ -750,6 +888,21 @@ def api_cart_update_qty():
 
     cart = session.get("cart", [])
     if 0 <= index < len(cart):
+        item = cart[index]
+        unit = item.get("unit")
+        if not unit:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT unit FROM products WHERE item_code=%s", (item.get("code"),))
+            r = cur.fetchone()
+            unit = r[0] if r else "pc"
+            cur.close()
+            conn.close()
+
+        valid_qty, err_qty = validate_unit_quantity(quantity, unit)
+        if not valid_qty:
+            return jsonify({"error": err_qty}), 400
+
         new_qty = Decimal(str(quantity))
         price = Decimal(str(cart[index]["price"]))
         cart[index]["qty"] = float(new_qty)
@@ -926,6 +1079,13 @@ def api_checkout():
     if not cart:
         return jsonify({"error": "Cart is empty"}), 400
 
+    # Strict Unit-based Quantity Validation for all checkout items
+    for item in cart:
+        unit = item.get("unit")
+        valid_qty, err_qty = validate_unit_quantity(item.get("qty"), unit)
+        if not valid_qty:
+            return jsonify({"error": f"Item '{item.get('name')}': {err_qty}"}), 400
+
     data = request.get_json(silent=True) or {}
     customer = session.get("customer", {})
 
@@ -997,7 +1157,7 @@ def api_checkout():
         rel_pdf_path = f"static/invoices/{year}/{month}/{invoice_no}.pdf"
 
         with open(pdf_path, "wb") as f:
-            pisa.CreatePDF(html, dest=f)
+            pisa.CreatePDF(html, dest=f, link_callback=link_callback)
 
         # 5. Save PDF Path
         cur.execute("""
@@ -1182,9 +1342,32 @@ def api_save_purchase():
     data = request.get_json() or request.form
     supplier = data.get("supplier_name", "").strip()
     purchase_date = data.get("purchase_date")
-    bill_status = data.get("bill_status", "Received")
-    grand_total = data.get("grand_total")
+    grand_total = Decimal(str(data.get("grand_total", 0)))
     items = data.get("items", [])
+
+    # Separate Goods Receipt Status from Payment Status
+    receipt_status = (data.get("receipt_status") or "").strip() or "Received"
+    if receipt_status not in ["Pending Receipt", "Received", "Verified", "Partially Received"]:
+        receipt_status = "Received"
+
+    payment_method = (data.get("payment_method") or "").strip() or "Cash"
+
+    # Automatically calculate Payment Status using grand_total and paid_amount
+    raw_paid = data.get("paid_amount")
+    if raw_paid is not None and str(raw_paid).strip() != "":
+        paid_amount = Decimal(str(raw_paid))
+    else:
+        if data.get("payment_status") == "Unpaid":
+            paid_amount = Decimal("0.00")
+        else:
+            paid_amount = grand_total
+
+    if paid_amount >= grand_total:
+        payment_status = "Paid"
+    elif paid_amount > Decimal("0.00"):
+        payment_status = "Partially Paid"
+    else:
+        payment_status = "Unpaid"
 
     if not supplier:
         return jsonify({"error": "Supplier name is required"}), 400
@@ -1194,50 +1377,150 @@ def api_save_purchase():
         return jsonify({"error": "At least one purchase item is required"}), 400
 
     conn = get_db_connection()
+    ensure_purchase_schema(conn)
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            INSERT INTO purchases
-            (supplier_name, total, bill_status, purchase_date)
-            VALUES (%s,%s,%s,%s)
-            RETURNING id
-        """, (supplier, grand_total, bill_status, purchase_date))
-        purchase_id = cur.fetchone()[0]
-
+        # Pre-validate all line items: Strict unit validation
+        validated_items = []
         for item in items:
             code = item.get("item_code")
-            qty = Decimal(str(item.get("quantity", 0)))
+            cur.execute("SELECT item_name, unit FROM products WHERE item_code=%s", (code,))
+            p_row = cur.fetchone()
+            if not p_row:
+                cur.close()
+                conn.close()
+                return jsonify({"error": f"Product with code '{code}' does not exist"}), 404
+
+            p_name, p_unit = p_row
+            raw_qty = item.get("quantity", 0)
+            valid_qty, err_qty = validate_unit_quantity(raw_qty, p_unit)
+            if not valid_qty:
+                cur.close()
+                conn.close()
+                return jsonify({"error": f"Item '{p_name}' ({code}): {err_qty}"}), 400
+
+            qty = Decimal(str(raw_qty))
             cost = Decimal(str(item.get("cost_price", 0)))
             tot = Decimal(str(item.get("total", cost * qty)))
+            validated_items.append((code, p_name, cost, qty, tot))
 
+        # Record receipt and verification dates
+        receipt_date = purchase_date if receipt_status in ["Received", "Verified", "Partially Received"] else None
+        verified_date = purchase_date if receipt_status == "Verified" else None
+
+        # Stock update rule: Only increase stock if physically Received or Verified
+        # Never increase inventory if status is 'Pending Receipt'
+        should_update_stock = receipt_status in ["Received", "Verified", "Partially Received"]
+        stock_updated = should_update_stock
+
+        cur.execute("""
+            INSERT INTO purchases
+            (supplier_name, total, bill_status, purchase_date, receipt_status, payment_status, payment_method, paid_amount, receipt_date, verified_date, stock_updated)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            supplier, grand_total, payment_status, purchase_date,
+            receipt_status, payment_status, payment_method, paid_amount,
+            receipt_date, verified_date, stock_updated
+        ))
+        purchase_id = cur.fetchone()[0]
+
+        for (code, p_name, cost, qty, tot) in validated_items:
             cur.execute("""
                 INSERT INTO purchase_items
                 (purchase_id, item_code, product_name, cost_price, quantity, total)
-                VALUES (
-                    %s, %s,
-                    (SELECT item_name FROM products WHERE item_code=%s),
-                    %s, %s, %s
-                )
-            """, (purchase_id, code, code, cost, qty, tot))
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (purchase_id, code, p_name, cost, qty, tot))
 
-            # Automatically increment stock in inventory!
-            cur.execute("""
-                UPDATE products
-                SET stock = stock + %s
-                WHERE item_code = %s
-            """, (qty, code))
+            if should_update_stock:
+                cur.execute("""
+                    UPDATE products
+                    SET stock = stock + %s
+                    WHERE item_code = %s
+                """, (qty, code))
 
         conn.commit()
         return jsonify({
             "success": True,
             "purchase_id": purchase_id,
-            "message": "Purchase recorded and inventory updated successfully"
+            "receipt_status": receipt_status,
+            "payment_status": payment_status,
+            "payment_method": payment_method,
+            "stock_updated": stock_updated,
+            "message": "Purchase recorded successfully" + (" and inventory updated" if should_update_stock else " (stock pending physical receipt)")
         })
 
     except Exception as e:
         conn.rollback()
         return jsonify({"error": f"Failed to save purchase: {str(e)}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/purchases/<int:purchase_id>/receive", methods=["POST"])
+def api_receive_purchase(purchase_id):
+    """Marks a pending purchase as physically Received, incrementing inventory stock exactly once."""
+    conn = get_db_connection()
+    ensure_purchase_schema(conn)
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT stock_updated, receipt_status FROM purchases WHERE id=%s", (purchase_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Purchase record not found"}), 404
+
+        stock_updated, current_status = row
+        if not stock_updated:
+            # Increment stock for items
+            cur.execute("SELECT item_code, quantity FROM purchase_items WHERE purchase_id=%s", (purchase_id,))
+            for (code, qty) in cur.fetchall():
+                cur.execute("UPDATE products SET stock = stock + %s WHERE item_code=%s", (qty, code))
+
+        cur.execute("""
+            UPDATE purchases
+            SET receipt_status = 'Received', receipt_date = CURRENT_DATE, stock_updated = TRUE
+            WHERE id=%s
+        """, (purchase_id,))
+        conn.commit()
+        return jsonify({"success": True, "message": f"Consignment #{purchase_id} marked as Received and inventory updated."})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/purchases/<int:purchase_id>/verify", methods=["POST"])
+def api_verify_purchase(purchase_id):
+    """Marks a purchase consignment as Verified."""
+    conn = get_db_connection()
+    ensure_purchase_schema(conn)
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT stock_updated FROM purchases WHERE id=%s", (purchase_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Purchase record not found"}), 404
+
+        stock_updated = row[0]
+        if not stock_updated:
+            cur.execute("SELECT item_code, quantity FROM purchase_items WHERE purchase_id=%s", (purchase_id,))
+            for (code, qty) in cur.fetchall():
+                cur.execute("UPDATE products SET stock = stock + %s WHERE item_code=%s", (qty, code))
+
+        cur.execute("""
+            UPDATE purchases
+            SET receipt_status = 'Verified', verified_date = CURRENT_DATE, stock_updated = TRUE
+            WHERE id=%s
+        """, (purchase_id,))
+        conn.commit()
+        return jsonify({"success": True, "message": f"Consignment #{purchase_id} verified against purchase record."})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 400
     finally:
         cur.close()
         conn.close()
@@ -1248,6 +1531,7 @@ def api_purchase_history():
     purchase_date = request.args.get("purchase_date", "").strip()
 
     conn = get_db_connection()
+    ensure_purchase_schema(conn)
     cur = conn.cursor()
 
     cur.execute("""
@@ -1267,63 +1551,68 @@ def api_purchase_history():
         """, (supplier,))
         dates = [d[0].isoformat() if isinstance(d[0], date) else str(d[0]) for d in cur.fetchall()]
 
+    # Flexible filtering: by supplier, by date, by both, or default recent 30
+    query = """
+        SELECT id, supplier_name, total, bill_status, purchase_date, created_at,
+               COALESCE(receipt_status, 'Received'),
+               COALESCE(payment_status, bill_status, 'Paid'),
+               COALESCE(payment_method, 'Cash'),
+               COALESCE(paid_amount, total),
+               receipt_date, verified_date, COALESCE(stock_updated, TRUE)
+        FROM purchases
+    """
+    params = []
+    where_clauses = []
+    if supplier:
+        where_clauses.append("supplier_name=%s")
+        params.append(supplier)
+    if purchase_date:
+        where_clauses.append("purchase_date=%s")
+        params.append(purchase_date)
+
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
+    query += " ORDER BY purchase_date DESC, id DESC LIMIT 50"
+
+    cur.execute(query, tuple(params))
+    p_rows = cur.fetchall()
+
     purchases_list = []
-    if supplier and purchase_date:
+    for p in p_rows:
+        p_id = p[0]
         cur.execute("""
-            SELECT id, total, bill_status, purchase_date, created_at
-            FROM purchases
-            WHERE supplier_name=%s
-            AND purchase_date=%s
-            ORDER BY id DESC
-        """, (supplier, purchase_date))
-        p_rows = cur.fetchall()
+            SELECT product_name, cost_price, quantity, total, item_code
+            FROM purchase_items
+            WHERE purchase_id=%s
+        """, (p_id,))
+        item_rows = cur.fetchall()
 
-        for p in p_rows:
-            p_id = p[0]
-            cur.execute("""
-                SELECT product_name, cost_price, quantity, total, item_code
-                FROM purchase_items
-                WHERE purchase_id=%s
-            """, (p_id,))
-            item_rows = cur.fetchall()
-
-            p_items = []
-            for ir in item_rows:
-                p_items.append({
-                    "product_name": ir[0],
-                    "cost_price": float(ir[1]),
-                    "quantity": float(ir[2]),
-                    "total": float(ir[3]),
-                    "item_code": ir[4]
-                })
-
-            purchases_list.append({
-                "id": p[0],
-                "supplier_name": supplier,
-                "total": float(p[1]),
-                "bill_status": p[2] or "Received",
-                "purchase_date": p[3].isoformat() if isinstance(p[3], date) else str(p[3]),
-                "created_at": p[4].isoformat() if p[4] else None,
-                "items": p_items
+        p_items = []
+        for ir in item_rows:
+            p_items.append({
+                "product_name": ir[0],
+                "cost_price": float(ir[1]),
+                "quantity": float(ir[2]),
+                "total": float(ir[3]),
+                "item_code": ir[4]
             })
-    elif not supplier and not purchase_date:
-        # Return recent 15 purchases when no filters selected
-        cur.execute("""
-            SELECT id, supplier_name, total, bill_status, purchase_date, created_at
-            FROM purchases
-            ORDER BY purchase_date DESC, id DESC
-            LIMIT 15
-        """)
-        for p in cur.fetchall():
-            purchases_list.append({
-                "id": p[0],
-                "supplier_name": p[1],
-                "total": float(p[2]),
-                "bill_status": p[3] or "Received",
-                "purchase_date": p[4].isoformat() if isinstance(p[4], date) else str(p[4]),
-                "created_at": p[5].isoformat() if p[5] else None,
-                "items": []
-            })
+
+        purchases_list.append({
+            "id": p[0],
+            "supplier_name": p[1],
+            "total": float(p[2]),
+            "bill_status": p[3] or "Received",
+            "purchase_date": p[4].isoformat() if isinstance(p[4], date) else str(p[4]),
+            "created_at": p[5].isoformat() if p[5] else None,
+            "receipt_status": p[6],
+            "payment_status": p[7],
+            "payment_method": p[8],
+            "paid_amount": float(p[9] or 0),
+            "receipt_date": p[10].isoformat() if p[10] else None,
+            "verified_date": p[11].isoformat() if p[11] else None,
+            "stock_updated": bool(p[12]),
+            "items": p_items
+        })
 
     cur.close()
     conn.close()
@@ -1793,7 +2082,7 @@ def checkout():
         pdf_path = os.path.join(folder_path, f"{invoice_no}.pdf")
 
         with open(pdf_path, "wb") as f:
-            pisa.CreatePDF(html, dest=f)
+            pisa.CreatePDF(html, dest=f, link_callback=link_callback)
 
         cur.execute("UPDATE bills SET pdf_path=%s WHERE invoice_no=%s", (f"static/invoices/{year}/{month}/{invoice_no}.pdf", invoice_no))
         conn.commit()
@@ -1822,15 +2111,48 @@ def bill_pdf(invoice_no):
     cur.close()
     conn.close()
 
-    html = render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items)
+    html = render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items, autoprint=False)
     pdf = io.BytesIO()
-    pisa.CreatePDF(html, dest=pdf)
+    pisa.CreatePDF(html, dest=pdf, link_callback=link_callback)
     pdf.seek(0)
 
     return send_file(pdf, mimetype="application/pdf", download_name=f"{invoice_no}.pdf", as_attachment=True)
 
+@app.route("/bill/<invoice_no>/pdf/view")
+@app.route("/api/bills/<invoice_no>/pdf/view")
+def bill_pdf_view(invoice_no):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT total, created_at, customer_name, pdf_path FROM bills WHERE invoice_no=%s", (invoice_no,))
+    bill = cur.fetchone()
+    if not bill:
+        cur.close()
+        conn.close()
+        return "Invoice not found", 404
+
+    # If physical PDF already exists on disk, stream directly with inline preview
+    if bill[3]:
+        physical_path = os.path.join(BASE_DIR, str(bill[3]).replace("/", os.sep))
+        if os.path.exists(physical_path):
+            cur.close()
+            conn.close()
+            return send_file(physical_path, mimetype="application/pdf", as_attachment=False)
+
+    cur.execute("SELECT product_name, price, quantity, total FROM bill_items WHERE invoice_no=%s", (invoice_no,))
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    html = render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items, autoprint=False)
+    pdf = io.BytesIO()
+    pisa.CreatePDF(html, dest=pdf, link_callback=link_callback)
+    pdf.seek(0)
+
+    return send_file(pdf, mimetype="application/pdf", as_attachment=False)
+
 @app.route("/bill/<invoice_no>")
 def bill_view(invoice_no):
+    autoprint = request.args.get("autoprint", "false").lower() in ["true", "1", "yes"]
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT total, created_at, customer_name FROM bills WHERE invoice_no=%s", (invoice_no,))
@@ -1841,7 +2163,7 @@ def bill_view(invoice_no):
     cur.close()
     conn.close()
 
-    return render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items)
+    return render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items, autoprint=autoprint)
 
 @app.route("/verify-bill", methods=["POST"])
 def verify_bill():

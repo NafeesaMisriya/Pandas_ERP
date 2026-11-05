@@ -9,6 +9,7 @@ export const Badge = ({ children, variant = 'default', size = 'md' }) => {
 
   const variantClasses = {
     default: 'bg-slate-100 text-slate-700 border-slate-200',
+    gold: 'bg-gold-50 text-gold-700 border-gold-200 font-semibold',
     success: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold',
     danger: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold',
     warning: 'bg-amber-50 text-amber-800 border-amber-200 font-semibold',

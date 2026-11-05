@@ -7,7 +7,7 @@ export const Layout = () => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-surface-warm flex">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <Header collapsed={collapsed} />
 

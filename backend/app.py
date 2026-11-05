@@ -1,4 +1,4 @@
-from flask import (Flask, render_template, request, session, redirect, url_for, send_file, jsonify, Response)
+from flask import (Flask, render_template, request, session, redirect, url_for, send_file, jsonify, Response, send_from_directory)
 from db import get_db_connection
 from decimal import Decimal
 from xhtml2pdf import pisa
@@ -65,6 +65,17 @@ def json_serialize_value(val):
         return float(val)
     return val
 
+def link_callback(uri, rel):
+    if uri.startswith("/static/"):
+        path = os.path.join(BASE_DIR, uri.lstrip("/"))
+        if os.path.exists(path):
+            return path
+    elif uri.startswith("static/"):
+        path = os.path.join(BASE_DIR, uri)
+        if os.path.exists(path):
+            return path
+    return uri
+
 # ----------------- HEALTH & SYSTEM API -----------------
 @app.route("/api/health")
 def api_health():
@@ -93,12 +104,37 @@ def api_dashboard_stats():
     """)
     total_bills, total_sales = cur.fetchone()
 
+    # Purchase metrics
+    cur.execute("SELECT COUNT(*), COALESCE(SUM(total), 0) FROM purchases")
+    total_purchases_count, total_purchases_sum = cur.fetchone()
+
     # Product counts
     cur.execute("SELECT COUNT(*) FROM products")
     total_products = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM products WHERE stock <= 5")
+    cur.execute("SELECT COUNT(*) FROM products WHERE stock <= 0")
+    out_of_stock_count = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM products WHERE stock > 0 AND stock <= 5")
     low_stock_count = cur.fetchone()[0]
+
+    # Attention needed products (out of stock and low stock, up to 6 items)
+    cur.execute("""
+        SELECT item_code, item_name, category, stock, unit
+        FROM products
+        WHERE stock <= 5
+        ORDER BY stock ASC, item_name ASC
+        LIMIT 6
+    """)
+    critical_products = []
+    for r in cur.fetchall():
+        critical_products.append({
+            "item_code": r[0],
+            "item_name": r[1],
+            "category": r[2],
+            "stock": float(r[3]),
+            "unit": r[4] or "pc"
+        })
 
     # Recent bills (last 5)
     cur.execute("""
@@ -171,8 +207,12 @@ def api_dashboard_stats():
         "today_bills": today_bills,
         "total_sales": float(total_sales),
         "total_bills": total_bills,
+        "total_purchases_count": total_purchases_count,
+        "total_purchases_sum": float(total_purchases_sum),
         "total_products": total_products,
         "low_stock_count": low_stock_count,
+        "out_of_stock_count": out_of_stock_count,
+        "critical_products": critical_products,
         "recent_bills": recent_bills,
         "recent_purchases": recent_purchases,
         "category_sales": category_sales,
@@ -940,12 +980,19 @@ def api_checkout():
         invoice_no = generate_invoice_no(cur)
         total = sum(i["total"] for i in cart)
 
+        cust_id = data.get("customer_id")
+        if not cust_id and cust_phone:
+            cur.execute("SELECT id FROM customers WHERE phone=%s LIMIT 1", (cust_phone,))
+            c_row = cur.fetchone()
+            if c_row:
+                cust_id = c_row[0]
+
         # 1. Insert Bill
         cur.execute("""
             INSERT INTO bills
-            (invoice_no, total, customer_name, customer_phone, payment_mode, status)
-            VALUES (%s,%s,%s,%s,%s,'PAID')
-        """, (invoice_no, total, cust_name, cust_phone, pay_mode))
+            (invoice_no, total, customer_name, customer_phone, payment_mode, status, customer_id)
+            VALUES (%s,%s,%s,%s,%s,'PAID',%s)
+        """, (invoice_no, total, cust_name, cust_phone, pay_mode, cust_id))
 
         # 2. Insert Items & Decrement Stock
         for item in cart:
@@ -997,7 +1044,7 @@ def api_checkout():
         rel_pdf_path = f"static/invoices/{year}/{month}/{invoice_no}.pdf"
 
         with open(pdf_path, "wb") as f:
-            pisa.CreatePDF(html, dest=f)
+            pisa.CreatePDF(html, dest=f, link_callback=link_callback)
 
         # 5. Save PDF Path
         cur.execute("""
@@ -1197,12 +1244,19 @@ def api_save_purchase():
     cur = conn.cursor()
 
     try:
+        supp_id = data.get("supplier_id")
+        if not supp_id and supplier:
+            cur.execute("SELECT id FROM suppliers WHERE name ILIKE %s LIMIT 1", (supplier,))
+            s_row = cur.fetchone()
+            if s_row:
+                supp_id = s_row[0]
+
         cur.execute("""
             INSERT INTO purchases
-            (supplier_name, total, bill_status, purchase_date)
-            VALUES (%s,%s,%s,%s)
+            (supplier_name, total, bill_status, purchase_date, supplier_id)
+            VALUES (%s,%s,%s,%s,%s)
             RETURNING id
-        """, (supplier, grand_total, bill_status, purchase_date))
+        """, (supplier, grand_total, bill_status, purchase_date, supp_id))
         purchase_id = cur.fetchone()[0]
 
         for item in items:
@@ -1568,6 +1622,746 @@ def api_generate_z_report():
         "net_sales": float(net_sales)
     })
 
+# ----------------- CUSTOMER MANAGEMENT APIS -----------------
+@app.route("/api/customers", methods=["GET"])
+def api_customers_list():
+    search = request.args.get("search", "").strip()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = """
+        SELECT 
+            c.id, c.customer_code, c.name, c.phone, c.email, 
+            c.address, c.notes, c.status, c.registration_date,
+            COUNT(DISTINCT b.invoice_no) as total_bills,
+            COALESCE(SUM(b.total), 0) as total_spent,
+            MAX(b.created_at) as last_purchase
+        FROM customers c
+        LEFT JOIN bills b ON (c.id = b.customer_id OR (b.customer_name = c.name AND b.customer_phone = c.phone AND b.status='PAID'))
+        WHERE (%s = '' OR c.name ILIKE %s OR c.phone ILIKE %s OR c.customer_code ILIKE %s)
+        GROUP BY c.id
+        ORDER BY c.id DESC
+    """
+    pattern = f"%{search}%"
+    cur.execute(query, (search, pattern, pattern, pattern))
+    rows = cur.fetchall()
+    customers = []
+    for r in rows:
+        customers.append({
+            "id": r[0],
+            "customer_code": r[1] or f"CUST-{r[0]:04d}",
+            "name": r[2],
+            "phone": r[3],
+            "email": r[4] or "",
+            "address": r[5] or "",
+            "notes": r[6] or "",
+            "status": r[7] or "ACTIVE",
+            "registration_date": r[8].isoformat() if r[8] else None,
+            "total_bills": int(r[9]),
+            "total_spent": float(r[10]),
+            "last_purchase": r[11].strftime("%Y-%m-%d %H:%M") if r[11] else None
+        })
+    cur.close()
+    conn.close()
+    return jsonify(customers)
+
+@app.route("/api/customers/<int:cust_id>", methods=["GET"])
+def api_customer_detail(cust_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, customer_code, name, phone, email, address, notes, status, registration_date FROM customers WHERE id=%s", (cust_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "Customer not found"}), 404
+
+    cur.execute("""
+        SELECT invoice_no, total, payment_mode, status, created_at
+        FROM bills
+        WHERE customer_id=%s OR (customer_name=%s AND customer_phone=%s)
+        ORDER BY created_at DESC
+        LIMIT 50
+    """, (cust_id, row[2], row[3]))
+    bills = []
+    for b in cur.fetchall():
+        bills.append({
+            "invoice_no": b[0],
+            "total": float(b[1]),
+            "payment_mode": b[2],
+            "status": b[3],
+            "created_at": b[4].strftime("%Y-%m-%d %H:%M") if b[4] else None
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({
+        "id": row[0],
+        "customer_code": row[1] or f"CUST-{row[0]:04d}",
+        "name": row[2],
+        "phone": row[3],
+        "email": row[4] or "",
+        "address": row[5] or "",
+        "notes": row[6] or "",
+        "status": row[7] or "ACTIVE",
+        "registration_date": row[8].isoformat() if row[8] else None,
+        "history": bills,
+        "total_bills": len(bills),
+        "total_spent": sum(b["total"] for b in bills if b["status"] == "PAID")
+    })
+
+@app.route("/api/customers", methods=["POST"])
+def api_customer_create():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name or not phone:
+        return jsonify({"error": "Name and phone number are required"}), 400
+
+    email = (data.get("email") or "").strip()
+    address = (data.get("address") or "").strip()
+    notes = (data.get("notes") or "").strip()
+    status = data.get("status", "ACTIVE")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("SELECT MAX(id) FROM customers")
+    max_id = cur.fetchone()[0] or 0
+    customer_code = data.get("customer_code") or f"CUST-{max_id + 1:04d}"
+
+    try:
+        cur.execute("""
+            INSERT INTO customers (customer_code, name, phone, email, address, notes, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (customer_code, name, phone, email, address, notes, status))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "id": new_id, "customer_code": customer_code, "name": name}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/customers/<int:cust_id>", methods=["PUT"])
+def api_customer_update(cust_id):
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name or not phone:
+        return jsonify({"error": "Name and phone number are required"}), 400
+
+    email = (data.get("email") or "").strip()
+    address = (data.get("address") or "").strip()
+    notes = (data.get("notes") or "").strip()
+    status = data.get("status", "ACTIVE")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE customers
+            SET name=%s, phone=%s, email=%s, address=%s, notes=%s, status=%s
+            WHERE id=%s
+        """, (name, phone, email, address, notes, status, cust_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Customer updated successfully"})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/customers/<int:cust_id>", methods=["DELETE"])
+def api_customer_delete(cust_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM bills WHERE customer_id=%s", (cust_id,))
+    if cur.fetchone()[0] > 0:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "Cannot delete customer with recorded sales history. Set status to INACTIVE instead."}), 400
+
+    cur.execute("DELETE FROM customers WHERE id=%s", (cust_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True, "message": "Customer deleted successfully"})
+
+# ----------------- SUPPLIER MANAGEMENT APIS -----------------
+@app.route("/api/suppliers", methods=["GET"])
+def api_suppliers_list():
+    search = request.args.get("search", "").strip()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = """
+        SELECT 
+            s.id, s.supplier_code, s.name, s.contact_person, s.phone,
+            s.email, s.address, s.gstin, s.status,
+            COUNT(DISTINCT p.id) as total_orders,
+            COALESCE(SUM(p.total), 0) as total_purchased,
+            MAX(p.purchase_date) as last_order_date
+        FROM suppliers s
+        LEFT JOIN purchases p ON (s.id = p.supplier_id OR p.supplier_name = s.name)
+        WHERE (%s = '' OR s.name ILIKE %s OR s.phone ILIKE %s OR s.contact_person ILIKE %s OR s.supplier_code ILIKE %s)
+        GROUP BY s.id
+        ORDER BY s.id DESC
+    """
+    pattern = f"%{search}%"
+    cur.execute(query, (search, pattern, pattern, pattern, pattern))
+    rows = cur.fetchall()
+    suppliers = []
+    for r in rows:
+        suppliers.append({
+            "id": r[0],
+            "supplier_code": r[1] or f"SUPP-{r[0]:04d}",
+            "name": r[2],
+            "contact_person": r[3] or "",
+            "phone": r[4],
+            "email": r[5] or "",
+            "address": r[6] or "",
+            "gstin": r[7] or "",
+            "status": r[8] or "ACTIVE",
+            "total_orders": int(r[9]),
+            "total_purchased": float(r[10]),
+            "last_order_date": r[11].strftime("%Y-%m-%d") if r[11] else None
+        })
+    cur.close()
+    conn.close()
+    return jsonify(suppliers)
+
+@app.route("/api/suppliers/<int:supp_id>", methods=["GET"])
+def api_supplier_detail(supp_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, supplier_code, name, contact_person, phone, email, address, gstin, status FROM suppliers WHERE id=%s", (supp_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "Supplier not found"}), 404
+
+    cur.execute("""
+        SELECT id, purchase_date, bill_status, total, created_at
+        FROM purchases
+        WHERE supplier_id=%s OR supplier_name=%s
+        ORDER BY purchase_date DESC
+        LIMIT 50
+    """, (supp_id, row[2]))
+    orders = []
+    for o in cur.fetchall():
+        orders.append({
+            "id": o[0],
+            "purchase_date": o[1].strftime("%Y-%m-%d") if o[1] else None,
+            "bill_status": o[2],
+            "total": float(o[3]),
+            "created_at": o[4].strftime("%Y-%m-%d %H:%M") if o[4] else None
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({
+        "id": row[0],
+        "supplier_code": row[1] or f"SUPP-{row[0]:04d}",
+        "name": row[2],
+        "contact_person": row[3] or "",
+        "phone": row[4],
+        "email": row[5] or "",
+        "address": row[6] or "",
+        "gstin": row[7] or "",
+        "status": row[8] or "ACTIVE",
+        "orders": orders,
+        "total_orders": len(orders),
+        "total_purchased": sum(o["total"] for o in orders)
+    })
+
+@app.route("/api/suppliers", methods=["POST"])
+def api_supplier_create():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name:
+        return jsonify({"error": "Supplier name is required"}), 400
+
+    contact_person = (data.get("contact_person") or "").strip()
+    email = (data.get("email") or "").strip()
+    address = (data.get("address") or "").strip()
+    gstin = (data.get("gstin") or "").strip()
+    status = data.get("status", "ACTIVE")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(id) FROM suppliers")
+    max_id = cur.fetchone()[0] or 0
+    supplier_code = data.get("supplier_code") or f"SUPP-{max_id + 1:04d}"
+
+    try:
+        cur.execute("""
+            INSERT INTO suppliers (supplier_code, name, contact_person, phone, email, address, gstin, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (supplier_code, name, contact_person, phone, email, address, gstin, status))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "id": new_id, "supplier_code": supplier_code, "name": name}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/suppliers/<int:supp_id>", methods=["PUT"])
+def api_supplier_update(supp_id):
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Supplier name is required"}), 400
+
+    contact_person = (data.get("contact_person") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    email = (data.get("email") or "").strip()
+    address = (data.get("address") or "").strip()
+    gstin = (data.get("gstin") or "").strip()
+    status = data.get("status", "ACTIVE")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE suppliers
+            SET name=%s, contact_person=%s, phone=%s, email=%s, address=%s, gstin=%s, status=%s
+            WHERE id=%s
+        """, (name, contact_person, phone, email, address, gstin, status, supp_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Supplier updated successfully"})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/suppliers/<int:supp_id>", methods=["DELETE"])
+def api_supplier_delete(supp_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM purchases WHERE supplier_id=%s", (supp_id,))
+    if cur.fetchone()[0] > 0:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "Cannot delete supplier with recorded purchase transactions. Set status to INACTIVE instead."}), 400
+
+    cur.execute("DELETE FROM suppliers WHERE id=%s", (supp_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True, "message": "Supplier deleted successfully"})
+
+# ----------------- LOW STOCK & OUT-OF-STOCK INVENTORY APIS -----------------
+@app.route("/api/inventory/alerts", methods=["GET"])
+def api_inventory_alerts():
+    stock_filter = request.args.get("status", "all").lower()
+    category = request.args.get("category", "").strip()
+    search = request.args.get("search", "").strip()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT 
+            COUNT(*),
+            COUNT(CASE WHEN stock <= 0 THEN 1 END) as out_of_stock,
+            COUNT(CASE WHEN stock > 0 AND stock <= COALESCE(reorder_level, 5.0) THEN 1 END) as low_stock,
+            COUNT(CASE WHEN stock > COALESCE(reorder_level, 5.0) THEN 1 END) as healthy,
+            COALESCE(SUM(CASE WHEN stock < COALESCE(reorder_level, 5.0) THEN (COALESCE(reorder_level, 5.0) - stock) ELSE 0 END), 0) as total_shortage_units,
+            COALESCE(SUM(CASE WHEN stock < COALESCE(reorder_level, 5.0) THEN (COALESCE(reorder_level, 5.0) - stock) * cost_price ELSE 0 END), 0) as estimated_restock_cost
+        FROM products
+    """)
+    sum_row = cur.fetchone()
+    summary = {
+        "total_products": sum_row[0] or 0,
+        "out_of_stock_count": sum_row[1] or 0,
+        "low_stock_count": sum_row[2] or 0,
+        "healthy_count": sum_row[3] or 0,
+        "total_shortage_units": float(sum_row[4] or 0),
+        "estimated_restock_cost": float(sum_row[5] or 0),
+    }
+
+    base_query = """
+        SELECT 
+            item_code, item_name, category, unit, stock, price, cost_price, 
+            COALESCE(reorder_level, 5.0) as reorder_lvl,
+            company,
+            CASE 
+                WHEN stock <= 0 THEN 'OUT_OF_STOCK'
+                WHEN stock <= COALESCE(reorder_level, 5.0) THEN 'LOW_STOCK'
+                ELSE 'HEALTHY'
+            END as stock_status
+        FROM products
+        WHERE 1=1
+    """
+    params = []
+    if category:
+        base_query += " AND category = %s"
+        params.append(category)
+
+    if search:
+        base_query += " AND (item_name ILIKE %s OR item_code ILIKE %s)"
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    if stock_filter == "out_of_stock":
+        base_query += " AND stock <= 0"
+    elif stock_filter == "low_stock":
+        base_query += " AND stock > 0 AND stock <= COALESCE(reorder_level, 5.0)"
+    elif stock_filter == "alerts_only":
+        base_query += " AND stock <= COALESCE(reorder_level, 5.0)"
+    elif stock_filter == "healthy":
+        base_query += " AND stock > COALESCE(reorder_level, 5.0)"
+
+    base_query += " ORDER BY CASE WHEN stock <= 0 THEN 0 WHEN stock <= COALESCE(reorder_level, 5.0) THEN 1 ELSE 2 END, stock ASC, item_name ASC"
+
+    cur.execute(base_query, params)
+    items = []
+    for r in cur.fetchall():
+        stock_val = safe_float(r[4], 0.0)
+        cost_val = safe_float(r[6], 0.0)
+        reorder_lvl = safe_float(r[7], 5.0)
+        shortage = max(0.0, reorder_lvl - stock_val)
+        restock_cost = shortage * cost_val
+        items.append({
+            "item_code": r[0],
+            "item_name": r[1],
+            "category": r[2],
+            "unit": r[3],
+            "stock": stock_val,
+            "price": safe_float(r[5], 0.0),
+            "cost_price": cost_val,
+            "reorder_level": reorder_lvl,
+            "company": r[8] or "",
+            "stock_status": r[9],
+            "shortage": shortage,
+            "restock_cost": restock_cost
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({
+        "summary": summary,
+        "items": items
+    })
+
+@app.route("/api/inventory/reorder-level/<item_code>", methods=["PATCH"])
+def api_inventory_update_reorder_level(item_code):
+    data = request.get_json() or {}
+    level = safe_float(data.get("reorder_level"), 5.0)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE products SET reorder_level=%s WHERE item_code=%s", (level, item_code))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True, "item_code": item_code, "reorder_level": level})
+
+# ----------------- EXPENSE TRACKING APIS -----------------
+EXPENSE_CATEGORIES = [
+    "Rent", "Utilities", "Salaries", "Packaging", 
+    "Transport", "Maintenance", "Marketing", "Miscellaneous"
+]
+
+@app.route("/api/expenses/categories", methods=["GET"])
+def api_expense_categories():
+    return jsonify(EXPENSE_CATEGORIES)
+
+@app.route("/api/expenses", methods=["GET"])
+def api_expenses_list():
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+    category = request.args.get("category", "").strip()
+    search = request.args.get("search", "").strip()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    query = "SELECT id, expense_date, category, title, amount, payment_mode, reference_no, notes, created_at FROM expenses WHERE 1=1"
+    params = []
+
+    if from_date:
+        query += " AND expense_date >= %s"
+        params.append(from_date)
+    if to_date:
+        query += " AND expense_date <= %s"
+        params.append(to_date)
+    if category:
+        query += " AND category = %s"
+        params.append(category)
+    if search:
+        query += " AND (title ILIKE %s OR reference_no ILIKE %s OR notes ILIKE %s)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    query += " ORDER BY expense_date DESC, id DESC"
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+
+    expenses = []
+    total_amount = 0.0
+    category_totals = {}
+
+    for r in rows:
+        amt = float(r[4])
+        cat = r[2]
+        total_amount += amt
+        category_totals[cat] = category_totals.get(cat, 0.0) + amt
+        expenses.append({
+            "id": r[0],
+            "expense_date": r[1].strftime("%Y-%m-%d") if r[1] else None,
+            "category": cat,
+            "title": r[3],
+            "amount": amt,
+            "payment_mode": r[5],
+            "reference_no": r[6] or "",
+            "notes": r[7] or "",
+            "created_at": r[8].strftime("%Y-%m-%d %H:%M") if r[8] else None
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({
+        "expenses": expenses,
+        "summary": {
+            "total_expenses": total_amount,
+            "count": len(expenses),
+            "category_breakdown": category_totals
+        }
+    })
+
+@app.route("/api/expenses", methods=["POST"])
+def api_expense_create():
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    amount = safe_float(data.get("amount"), 0.0)
+    category = (data.get("category") or "Miscellaneous").strip()
+    expense_date = data.get("expense_date") or date.today().isoformat()
+    payment_mode = data.get("payment_mode", "Cash")
+    reference_no = (data.get("reference_no") or "").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if not title:
+        return jsonify({"error": "Expense title is required"}), 400
+    if amount <= 0:
+        return jsonify({"error": "Expense amount must be greater than zero"}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO expenses (expense_date, category, title, amount, payment_mode, reference_no, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (expense_date, category, title, amount, payment_mode, reference_no, notes))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "id": new_id, "message": "Expense recorded successfully"}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/expenses/<int:exp_id>", methods=["PUT"])
+def api_expense_update(exp_id):
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    amount = safe_float(data.get("amount"), 0.0)
+    category = (data.get("category") or "Miscellaneous").strip()
+    expense_date = data.get("expense_date") or date.today().isoformat()
+    payment_mode = data.get("payment_mode", "Cash")
+    reference_no = (data.get("reference_no") or "").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if not title:
+        return jsonify({"error": "Expense title is required"}), 400
+    if amount <= 0:
+        return jsonify({"error": "Expense amount must be greater than zero"}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE expenses
+            SET expense_date=%s, category=%s, title=%s, amount=%s, payment_mode=%s, reference_no=%s, notes=%s
+            WHERE id=%s
+        """, (expense_date, category, title, amount, payment_mode, reference_no, notes, exp_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Expense updated successfully"})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/expenses/<int:exp_id>", methods=["DELETE"])
+def api_expense_delete(exp_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM expenses WHERE id=%s", (exp_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True, "message": "Expense deleted successfully"})
+
+# ----------------- EMPLOYEE MANAGEMENT APIS -----------------
+@app.route("/api/employees", methods=["GET"])
+def api_employees_list():
+    search = request.args.get("search", "").strip()
+    role = request.args.get("role", "").strip()
+    status = request.args.get("status", "").strip()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    query = "SELECT id, employee_code, name, role, phone, email, salary, status, joining_date, created_at FROM employees WHERE 1=1"
+    params = []
+
+    if search:
+        query += " AND (name ILIKE %s OR employee_code ILIKE %s OR phone ILIKE %s)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+    if role:
+        query += " AND role = %s"
+        params.append(role)
+    if status:
+        query += " AND status = %s"
+        params.append(status)
+
+    query += " ORDER BY id ASC"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+
+    employees = []
+    active_count = 0
+    total_payroll = 0.0
+
+    for r in rows:
+        sal = float(r[6] or 0.0)
+        st = r[7] or "ACTIVE"
+        if st == "ACTIVE":
+            active_count += 1
+            total_payroll += sal
+        employees.append({
+            "id": r[0],
+            "employee_code": r[1] or f"EMP-{r[0]:03d}",
+            "name": r[2],
+            "role": r[3],
+            "phone": r[4],
+            "email": r[5] or "",
+            "salary": sal,
+            "status": st,
+            "joining_date": r[8].strftime("%Y-%m-%d") if r[8] else None,
+            "created_at": r[9].strftime("%Y-%m-%d %H:%M") if r[9] else None
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({
+        "employees": employees,
+        "summary": {
+            "total_employees": len(employees),
+            "active_count": active_count,
+            "monthly_payroll": total_payroll
+        }
+    })
+
+@app.route("/api/employees", methods=["POST"])
+def api_employee_create():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name or not phone:
+        return jsonify({"error": "Employee name and phone are required"}), 400
+
+    role = (data.get("role") or "Staff").strip()
+    email = (data.get("email") or "").strip()
+    salary = safe_float(data.get("salary"), 0.0)
+    status = data.get("status", "ACTIVE")
+    joining_date = data.get("joining_date") or date.today().isoformat()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(id) FROM employees")
+    max_id = cur.fetchone()[0] or 0
+    employee_code = data.get("employee_code") or f"EMP-{max_id + 1:03d}"
+
+    try:
+        cur.execute("""
+            INSERT INTO employees (employee_code, name, role, phone, email, salary, status, joining_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (employee_code, name, role, phone, email, salary, status, joining_date))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "id": new_id, "employee_code": employee_code, "name": name}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/employees/<int:emp_id>", methods=["PUT"])
+def api_employee_update(emp_id):
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name or not phone:
+        return jsonify({"error": "Employee name and phone are required"}), 400
+
+    role = (data.get("role") or "Staff").strip()
+    email = (data.get("email") or "").strip()
+    salary = safe_float(data.get("salary"), 0.0)
+    status = data.get("status", "ACTIVE")
+    joining_date = data.get("joining_date") or date.today().isoformat()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE employees
+            SET name=%s, role=%s, phone=%s, email=%s, salary=%s, status=%s, joining_date=%s
+            WHERE id=%s
+        """, (name, role, phone, email, salary, status, joining_date, emp_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Employee updated successfully"})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/employees/<int:emp_id>", methods=["DELETE"])
+def api_employee_delete(emp_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM employees WHERE id=%s", (emp_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True, "message": "Employee deleted successfully"})
+
 # ----------------- PROTECTED HELPER FUNCTIONS -----------------
 def generate_invoice_no(cur):
     year = datetime.now().year
@@ -1611,7 +2405,17 @@ def generate_item_code(category, cur):
 # ----------------- ORIGINAL / LEGACY HTML ROUTES -----------------
 @app.route("/")
 def dashboard():
+    dist_index = os.path.join(BASE_DIR, "frontend", "dist", "index.html")
+    if os.path.exists(dist_index):
+        return send_file(dist_index)
     return render_template("dashboard.html")
+
+@app.route("/assets/<path:filename>")
+def serve_react_assets(filename):
+    assets_dir = os.path.join(BASE_DIR, "frontend", "dist", "assets")
+    if os.path.exists(os.path.join(assets_dir, filename)):
+        return send_from_directory(assets_dir, filename)
+    return "", 404
 
 @app.route("/billing", methods=["GET", "POST"])
 def billing():
@@ -1793,7 +2597,7 @@ def checkout():
         pdf_path = os.path.join(folder_path, f"{invoice_no}.pdf")
 
         with open(pdf_path, "wb") as f:
-            pisa.CreatePDF(html, dest=f)
+            pisa.CreatePDF(html, dest=f, link_callback=link_callback)
 
         cur.execute("UPDATE bills SET pdf_path=%s WHERE invoice_no=%s", (f"static/invoices/{year}/{month}/{invoice_no}.pdf", invoice_no))
         conn.commit()
@@ -1824,7 +2628,7 @@ def bill_pdf(invoice_no):
 
     html = render_template("bill.html", invoice_no=invoice_no, bill=bill, items=items)
     pdf = io.BytesIO()
-    pisa.CreatePDF(html, dest=pdf)
+    pisa.CreatePDF(html, dest=pdf, link_callback=link_callback)
     pdf.seek(0)
 
     return send_file(pdf, mimetype="application/pdf", download_name=f"{invoice_no}.pdf", as_attachment=True)

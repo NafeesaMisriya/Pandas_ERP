@@ -8,7 +8,7 @@ export const Loading = ({ text = 'Loading data...', fullHeight = false }) => {
         fullHeight ? 'min-h-[50vh]' : ''
       }`}
     >
-      <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      <Loader2 className="w-8 h-8 animate-spin text-gold-500" />
       <span className="text-sm font-medium">{text}</span>
     </div>
   );
