@@ -21,7 +21,7 @@ import {
   Sparkles,
   RotateCcw
 } from 'lucide-react';
-import { billingApi } from '../../services/api';
+import { billingApi, customersApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Loading } from '../../components/common/Loading';
 import { Modal } from '../../components/common/Modal';
@@ -36,7 +36,12 @@ export const Billing = () => {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
-  const [customer, setCustomer] = useState({ name: '', phone: '', payment_mode: 'Cash' });
+  const [customer, setCustomer] = useState({ customer_id: '', name: '', phone: '', payment_mode: 'Cash' });
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [showCustDropdown, setShowCustDropdown] = useState(false);
+  const [showQuickCustModal, setShowQuickCustModal] = useState(false);
+  const [quickCustForm, setQuickCustForm] = useState({ name: '', phone: '', email: '', address: '' });
+  const [savingQuickCust, setSavingQuickCust] = useState(false);
   const [billTotal, setBillTotal] = useState(0);
   const [heldBills, setHeldBills] = useState([]);
   const [showHeldModal, setShowHeldModal] = useState(false);
@@ -177,7 +182,7 @@ export const Billing = () => {
       const res = await billingApi.holdBill();
       setCart([]);
       setBillTotal(0);
-      setCustomer({ name: '', phone: '', payment_mode: 'Cash' });
+      setCustomer({ customer_id: '', name: '', phone: '', payment_mode: 'Cash' });
       setHeldBills(res.data.held_bills || []);
       toast.success('Current transaction parked successfully.');
     } catch (err) {
@@ -193,7 +198,12 @@ export const Billing = () => {
       setCart(res.data.cart);
       setBillTotal(res.data.bill_total);
       if (res.data.customer) {
-        setCustomer(res.data.customer);
+        setCustomer({
+          customer_id: res.data.customer.customer_id || '',
+          name: res.data.customer.name || '',
+          phone: res.data.customer.phone || '',
+          payment_mode: res.data.customer.payment_mode || 'Cash',
+        });
       }
       setHeldBills(res.data.held_bills || []);
       setShowHeldModal(false);
@@ -201,6 +211,63 @@ export const Billing = () => {
     } catch (err) {
       console.error(err);
       toast.error('Failed to resume bill');
+    }
+  };
+
+  // Search existing customers
+  const handleCustomerSearch = async (query) => {
+    setCustomer((prev) => ({ ...prev, name: query, customer_id: '' }));
+    if (!query.trim() || query.length < 2) {
+      setCustomerSuggestions([]);
+      setShowCustDropdown(false);
+      return;
+    }
+    try {
+      const res = await customersApi.search(query);
+      setCustomerSuggestions(res.data || []);
+      setShowCustDropdown((res.data || []).length > 0);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Select customer from suggestion list
+  const handleSelectCustomer = (c) => {
+    setCustomer({
+      customer_id: c.customer_id,
+      name: c.name,
+      phone: c.phone || '',
+      payment_mode: customer.payment_mode,
+    });
+    setShowCustDropdown(false);
+    toast.info(`Customer ${c.name} (${c.customer_id}) selected`);
+  };
+
+  // Quick Customer Registration
+  const handleQuickRegisterCustomer = async (e) => {
+    e.preventDefault();
+    if (!quickCustForm.name.trim()) {
+      toast.error('Customer name is required');
+      return;
+    }
+    try {
+      setSavingQuickCust(true);
+      const res = await customersApi.create(quickCustForm);
+      const newCust = res.data;
+      setCustomer({
+        customer_id: newCust.customer_id,
+        name: newCust.name,
+        phone: newCust.phone || '',
+        payment_mode: customer.payment_mode,
+      });
+      setShowQuickCustModal(false);
+      setQuickCustForm({ name: '', phone: '', email: '', address: '' });
+      toast.success(`Customer ${newCust.name} (${newCust.customer_id}) registered & linked!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to register customer');
+    } finally {
+      setSavingQuickCust(false);
     }
   };
 
@@ -214,6 +281,7 @@ export const Billing = () => {
     try {
       setIsCheckingOut(true);
       const res = await billingApi.checkout({
+        customer_id: customer.customer_id || null,
         customer_name: customer.name,
         customer_phone: customer.phone,
         payment_mode: customer.payment_mode,
@@ -222,7 +290,7 @@ export const Billing = () => {
       setCheckoutResult(res.data);
       setCart([]);
       setBillTotal(0);
-      setCustomer({ name: '', phone: '', payment_mode: 'Cash' });
+      setCustomer({ customer_id: '', name: '', phone: '', payment_mode: 'Cash' });
       toast.success(`Invoice ${res.data.invoice_no} generated!`);
     } catch (err) {
       console.error('Checkout error', err);
@@ -489,19 +557,69 @@ export const Billing = () => {
 
             {/* Customer & Payment Form */}
             <div className="p-4 bg-slate-50/80 border-t border-slate-200 space-y-3">
+              <div className="flex items-center justify-between pb-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Customer Details</span>
+                  {customer.customer_id && (
+                    <span className="px-2 py-0.5 rounded-md bg-gold-100 text-[#111111] font-mono font-bold text-[10px] border border-gold-300">
+                      {customer.customer_id}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {customer.customer_id && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomer({ customer_id: '', name: '', phone: '', payment_mode: customer.payment_mode })}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
+                      title="Clear customer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickCustModal(true)}
+                    className="text-[11px] font-bold text-gold-700 hover:text-gold-800 bg-gold-50 hover:bg-gold-100 px-2 py-0.5 rounded-lg border border-gold-200 transition"
+                  >
+                    + Quick Reg
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-2.5 text-xs">
-                <div>
+                <div className="relative">
                   <label className="block text-slate-500 font-bold mb-1 text-[11px]">Customer Name</label>
                   <div className="relative">
                     <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      placeholder="Walk-in Customer"
+                      placeholder="Type name or search..."
                       value={customer.name}
-                      onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                      onChange={(e) => handleCustomerSearch(e.target.value)}
+                      onFocus={() => customerSuggestions.length > 0 && setShowCustDropdown(true)}
                       className="w-full pl-8 pr-2 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 text-xs shadow-xs"
                     />
                   </div>
+
+                  {/* Typeahead Suggestions Dropdown */}
+                  {showCustDropdown && customerSuggestions.length > 0 && (
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
+                      {customerSuggestions.map((c) => (
+                        <div
+                          key={c.customer_id}
+                          onClick={() => handleSelectCustomer(c)}
+                          className="p-2 hover:bg-gold-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                        >
+                          <div>
+                            <div className="font-bold text-slate-900">{c.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{c.customer_id} • {c.phone || 'No phone'}</div>
+                          </div>
+                          <span className="text-[10px] text-gold-600 font-bold">Select</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -706,6 +824,79 @@ export const Billing = () => {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Quick Customer Registration Modal */}
+      <Modal
+        isOpen={showQuickCustModal}
+        onClose={() => setShowQuickCustModal(false)}
+        title="Quick Customer Registration"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleQuickRegisterCustomer} className="space-y-3.5 text-xs">
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Customer Full Name *</label>
+            <input
+              type="text"
+              placeholder="e.g. Anand Menon"
+              value={quickCustForm.name}
+              onChange={(e) => setQuickCustForm({ ...quickCustForm, name: e.target.value })}
+              required
+              autoFocus
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Mobile Phone</label>
+            <input
+              type="text"
+              placeholder="10-digit mobile"
+              value={quickCustForm.phone}
+              onChange={(e) => setQuickCustForm({ ...quickCustForm, phone: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Email Address (Optional)</label>
+            <input
+              type="email"
+              placeholder="customer@email.com"
+              value={quickCustForm.email}
+              onChange={(e) => setQuickCustForm({ ...quickCustForm, email: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1">Address (Optional)</label>
+            <input
+              type="text"
+              placeholder="Locality / Area"
+              value={quickCustForm.address}
+              onChange={(e) => setQuickCustForm({ ...quickCustForm, address: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowQuickCustModal(false)}
+              className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingQuickCust}
+              className="px-4 py-2 bg-[#F5B900] hover:bg-[#E5AC00] text-[#111111] font-black rounded-xl text-xs shadow-sm transition active:scale-95 disabled:opacity-50"
+            >
+              {savingQuickCust ? 'Registering...' : 'Register & Select'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

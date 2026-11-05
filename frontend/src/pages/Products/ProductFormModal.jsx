@@ -15,6 +15,8 @@ export const ProductFormModal = ({ isOpen, onClose, product, categories = [], on
     category: '',
     unit: 'kg',
     stock: 0,
+    min_stock: 5,
+    target_stock: 20,
     price: 0,
     cost_price: 0,
     sales_tax: 0,
@@ -43,6 +45,8 @@ export const ProductFormModal = ({ isOpen, onClose, product, categories = [], on
         category: product.category || (categories[0] || ''),
         unit: product.unit || 'kg',
         stock: product.stock ?? 0,
+        min_stock: product.min_stock ?? 5,
+        target_stock: product.target_stock ?? 20,
         price: product.price ?? 0,
         cost_price: product.cost_price ?? 0,
         sales_tax: product.sales_tax ?? 0,
@@ -70,6 +74,8 @@ export const ProductFormModal = ({ isOpen, onClose, product, categories = [], on
         category: defaultCat,
         unit: 'kg',
         stock: 0,
+        min_stock: 5,
+        target_stock: 20,
         price: 0,
         cost_price: 0,
         sales_tax: 0,
@@ -326,6 +332,53 @@ export const ProductFormModal = ({ isOpen, onClose, product, categories = [], on
                   <option value="ltr">ltr (Litre)</option>
                   <option value="gm">gm (Gram)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Threshold Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60">
+              <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200/60">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-amber-950 font-bold text-xs flex items-center gap-1.5">
+                    <span>⚠️ Minimum Stock Level</span>
+                    {isIntegerUnit(formData.unit) && (
+                      <span className="text-[10px] text-amber-700 font-normal">(whole unit)</span>
+                    )}
+                  </label>
+                  <span className="text-[10px] bg-amber-200/70 text-amber-900 font-semibold px-1.5 py-0.5 rounded">Alert trigger</span>
+                </div>
+                <input
+                  type="number"
+                  step={isIntegerUnit(formData.unit) ? "1" : "0.01"}
+                  min="0"
+                  value={formData.min_stock}
+                  onChange={(e) => setFormData({ ...formData, min_stock: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-amber-300/80 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-xs"
+                  placeholder="e.g. 5"
+                />
+                <p className="text-[11px] text-amber-800/80 mt-1">Triggers low-stock alerts when stock drops to or below this level.</p>
+              </div>
+
+              <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200/60">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                    <span>🎯 Target Stock Level</span>
+                    {isIntegerUnit(formData.unit) && (
+                      <span className="text-[10px] text-emerald-700 font-normal">(whole unit)</span>
+                    )}
+                  </label>
+                  <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-semibold px-1.5 py-0.5 rounded">Restock goal</span>
+                </div>
+                <input
+                  type="number"
+                  step={isIntegerUnit(formData.unit) ? "1" : "0.01"}
+                  min="0"
+                  value={formData.target_stock}
+                  onChange={(e) => setFormData({ ...formData, target_stock: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-emerald-300/80 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-xs"
+                  placeholder="e.g. 20"
+                />
+                <p className="text-[11px] text-emerald-800/80 mt-1">Defines ideal capacity for calculating Suggested Reorder Quantities.</p>
               </div>
             </div>
 

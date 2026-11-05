@@ -111,3 +111,35 @@ CREATE TABLE IF NOT EXISTS z_reports (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 9. CUSTOMERS TABLE
+CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    customer_id VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    phone VARCHAR(50),
+    email VARCHAR(200),
+    address TEXT,
+    status VARCHAR(20) DEFAULT 'Active',
+    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. SUPPLIERS TABLE
+CREATE TABLE IF NOT EXISTS suppliers (
+    id SERIAL PRIMARY KEY,
+    supplier_id VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    contact_person VARCHAR(200),
+    phone VARCHAR(50),
+    email VARCHAR(200),
+    address TEXT,
+    tax_number VARCHAR(100),
+    opening_balance NUMERIC(12, 2) DEFAULT 0.00,
+    status VARCHAR(20) DEFAULT 'Active',
+    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Foreign Key References (Nullable for backwards compatibility)
+ALTER TABLE bills ADD COLUMN IF NOT EXISTS customer_id VARCHAR(20) REFERENCES customers(customer_id) ON DELETE SET NULL;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS supplier_id VARCHAR(20) REFERENCES suppliers(supplier_id) ON DELETE SET NULL;
+
+
