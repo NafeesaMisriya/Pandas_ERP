@@ -11,10 +11,8 @@ import {
   BarChart3,
   CalendarCheck,
   Receipt,
-  BookOpen,
   Users,
   Building2,
-  UserCheck,
   ChevronLeft,
   Activity,
   CreditCard,
@@ -26,22 +24,20 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard, adminOnly: true },
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Billing / POS', path: '/billing', icon: ShoppingCart },
-  { name: 'Products Master', path: '/products', icon: Package, adminOnly: true },
-  { name: 'Inventory & Stock', path: '/inventory', icon: Boxes, adminOnly: true },
-  { name: 'Purchase Entry', path: '/purchases', icon: Truck, adminOnly: true },
-  { name: 'Purchase History', path: '/purchases/history', icon: History, adminOnly: true },
-  { name: 'Accounts Payable', path: '/payables', icon: CreditCard, adminOnly: true },
+  { name: 'Products Master', path: '/products', icon: Package },
+  { name: 'Inventory & Stock', path: '/inventory', icon: Boxes },
+  { name: 'Purchase Entry', path: '/purchases', icon: Truck },
+  { name: 'Purchase History', path: '/purchases/history', icon: History },
   { name: 'Invoices & Bills', path: '/bills', icon: FileText },
+  { name: 'Customers', path: '/customers', icon: Users },
+  { name: 'Suppliers', path: '/suppliers', icon: Building2 },
+  { name: 'Accounts Payable', path: '/payables', icon: CreditCard, adminOnly: true },
   { name: 'Sales Reports', path: '/reports', icon: BarChart3, adminOnly: true },
   { name: 'Daily Z-Report', path: '/z-report', icon: CalendarCheck, adminOnly: true },
   { name: 'Expenses', path: '/expenses', icon: Receipt, adminOnly: true },
   { name: 'Profit & Loss', path: '/profit-loss', icon: Activity, adminOnly: true },
-  { name: 'Customers', path: '/customers', icon: Users, adminOnly: true },
-  { name: 'Suppliers', path: '/suppliers', icon: Building2, adminOnly: true },
-  { name: 'Accounting', path: '/accounting', icon: BookOpen, placeholder: true, adminOnly: true },
-  { name: 'Users & Employees', path: '/users', icon: UserCheck, placeholder: true, adminOnly: true },
 ];
 
 export const Sidebar = ({ collapsed, setCollapsed }) => {

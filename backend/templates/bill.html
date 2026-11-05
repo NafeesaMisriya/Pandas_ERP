@@ -135,7 +135,7 @@
     </style>
 </head>
 
-<body onload="window.print()">
+<body {% if autoprint %}onload="window.print()"{% endif %}>
 
 <div class="navbar">
     <a href="/">🏠 Dashboard</a>
@@ -188,9 +188,31 @@
 
     <div class="divider"></div>
 
+    <!-- TOTALS BREAKDOWN -->
+    {% if discount_amount and discount_amount > 0 %}
+    <div style="font-size: 13px; margin: 8px 0; text-align: right;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+            <span style="color: #666;">Subtotal:</span>
+            <span style="font-weight: bold;">₹{{ "%.2f"|format(subtotal) }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #b45309;">
+            <span>
+                Discount
+                {% if discount_type == 'percentage' %}
+                    ({{ "%.2f"|format(discount_value) }}%):
+                {% else %}
+                    (Fixed):
+                {% endif %}
+            </span>
+            <span style="font-weight: bold;">-₹{{ "%.2f"|format(discount_amount) }}</span>
+        </div>
+    </div>
+    <div class="divider"></div>
+    {% endif %}
+
     <!-- TOTAL -->
     <div class="total-box">
-        TOTAL : ₹{{ "%.2f"|format(bill[0]) }}
+        {% if discount_amount and discount_amount > 0 %}NET PAYABLE{% else %}TOTAL{% endif %} : ₹{{ "%.2f"|format(bill[0]) }}
     </div>
 
     <div class="no-print">

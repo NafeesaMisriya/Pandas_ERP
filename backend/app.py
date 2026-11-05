@@ -134,6 +134,70 @@ def ensure_admin_schema(conn):
     except Exception:
         conn.rollback()
 
+def ensure_billing_discount_schema(conn):
+    """Ensures subtotal, discount_type, discount_value, and discount_amount columns exist in bills and held_bills."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE bills ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2) DEFAULT 0.00;
+                ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20) DEFAULT NULL;
+                ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_value NUMERIC(10,4) DEFAULT 0.00;
+                ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0.00;
+
+                ALTER TABLE held_bills ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20) DEFAULT NULL;
+                ALTER TABLE held_bills ADD COLUMN IF NOT EXISTS discount_value NUMERIC(10,4) DEFAULT 0.00;
+                ALTER TABLE held_bills ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0.00;
+
+                UPDATE bills SET subtotal = total WHERE subtotal IS NULL OR subtotal = 0.00;
+            """)
+            conn.commit()
+    except Exception:
+        conn.rollback()
+
+def calculate_cart_totals(cart, bill_discount=None):
+    """
+    Computes subtotal, discount_amount, and final_payable from cart items and discount settings.
+    Authoritative server-side calculation logic.
+    """
+    subtotal = sum(Decimal(str(item.get("total", 0))) for item in cart)
+    subtotal = subtotal.quantize(Decimal("0.01"))
+
+    if not bill_discount or not isinstance(bill_discount, dict):
+        bill_discount = {"type": None, "value": 0.0, "amount": 0.0}
+
+    d_type = bill_discount.get("type")
+    try:
+        d_val = Decimal(str(bill_discount.get("value", 0)))
+    except Exception:
+        d_val = Decimal("0")
+
+    if d_type == "percentage":
+        if d_val < Decimal("0"):
+            d_val = Decimal("0")
+        elif d_val > Decimal("100"):
+            d_val = Decimal("100")
+        discount_amount = (subtotal * d_val / Decimal("100")).quantize(Decimal("0.01"))
+    elif d_type == "fixed":
+        if d_val < Decimal("0"):
+            d_val = Decimal("0")
+        elif d_val > subtotal:
+            d_val = subtotal
+        discount_amount = d_val.quantize(Decimal("0.01"))
+    else:
+        d_type = None
+        d_val = Decimal("0")
+        discount_amount = Decimal("0.00")
+
+    final_payable = max(Decimal("0.00"), subtotal - discount_amount)
+
+    updated_discount = {
+        "type": d_type,
+        "value": float(d_val),
+        "amount": float(discount_amount)
+    }
+
+    return float(subtotal), updated_discount, float(final_payable)
+
 def record_admin_audit(cur, action, ip_address=None, details=None):
     """Logs admin authentication events for compliance."""
     try:
@@ -215,6 +279,9 @@ def ensure_customer_supplier_schema(conn):
                     status VARCHAR(20) DEFAULT 'Active',
                     registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+                ALTER TABLE customers ADD COLUMN IF NOT EXISTS customer_id VARCHAR(50);
+                ALTER TABLE customers ADD COLUMN IF NOT EXISTS registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                UPDATE customers SET customer_id = COALESCE(customer_id, customer_code, 'CUST-' || id::text) WHERE customer_id IS NULL;
             """)
             # suppliers table
             cur.execute("""
@@ -524,7 +591,6 @@ def api_auth_lock_admin():
 
 # ----------------- DASHBOARD API -----------------
 @app.route("/api/dashboard/stats")
-@admin_required
 def api_dashboard_stats():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -817,7 +883,6 @@ def api_get_product_detail(item_code):
     return jsonify(product)
 
 @app.route("/api/products", methods=["POST"])
-@admin_required
 def api_create_product():
     data = request.form.to_dict() if request.form else (request.get_json(silent=True) or request.values.to_dict() if hasattr(request, 'values') else {})
     image_file = request.files.get("product_image") if request.files else None
@@ -929,7 +994,6 @@ def api_create_product():
         conn.close()
 
 @app.route("/api/products/<item_code>", methods=["PUT", "POST"])
-@admin_required
 def api_update_product(item_code):
     data = request.form.to_dict() if request.form else (request.get_json(silent=True) or request.values.to_dict() if hasattr(request, 'values') else {})
     image_file = request.files.get("product_image") if request.files else None
@@ -1054,7 +1118,6 @@ def api_update_product(item_code):
         conn.close()
 
 @app.route("/api/products/<item_code>/quick-update", methods=["PATCH", "POST"])
-@admin_required
 def api_quick_update_product(item_code):
     data = request.get_json() or request.form
     price = data.get("price")
@@ -1177,6 +1240,7 @@ def api_billing_state():
         }
 
     conn = get_db_connection()
+    ensure_billing_discount_schema(conn)
     cur = conn.cursor()
 
     cur.execute("""
@@ -1205,14 +1269,71 @@ def api_billing_state():
     cur.close()
     conn.close()
 
-    bill_total = sum(float(i["total"]) for i in session["cart"])
+    bill_discount = session.get("bill_discount", {"type": None, "value": 0.0, "amount": 0.0})
+    subtotal, bill_discount, bill_total = calculate_cart_totals(session["cart"], bill_discount)
+    session["bill_discount"] = bill_discount
+    session.modified = True
 
     return jsonify({
         "cart": session["cart"],
         "customer": session["customer"],
-        "bill_total": round(bill_total, 2),
+        "subtotal": subtotal,
+        "bill_discount": bill_discount,
+        "bill_total": bill_total,
         "categories": categories,
         "held_bills": held_bills
+    })
+
+@app.route("/api/billing/discount", methods=["POST"])
+def api_set_discount():
+    data = request.get_json() or {}
+    d_type = data.get("type")
+    d_val = data.get("value", 0)
+
+    cart = session.get("cart", [])
+    subtotal = sum(Decimal(str(item.get("total", 0))) for item in cart).quantize(Decimal("0.01"))
+
+    if d_type == "percentage":
+        try:
+            val = Decimal(str(d_val))
+        except Exception:
+            return jsonify({"error": "Invalid discount percentage"}), 400
+        if val < Decimal("0") or val > Decimal("100"):
+            return jsonify({"error": "Percentage discount must be between 0% and 100%"}), 400
+        discount_amount = (subtotal * val / Decimal("100")).quantize(Decimal("0.01"))
+        d_val = float(val)
+    elif d_type == "fixed":
+        try:
+            val = Decimal(str(d_val))
+        except Exception:
+            return jsonify({"error": "Invalid fixed discount amount"}), 400
+        if val < Decimal("0"):
+            return jsonify({"error": "Discount amount cannot be negative"}), 400
+        if val > subtotal:
+            return jsonify({"error": f"Fixed discount cannot exceed the cart subtotal of ₹{float(subtotal):.2f}"}), 400
+        discount_amount = val.quantize(Decimal("0.01"))
+        d_val = float(val)
+    else:
+        d_type = None
+        d_val = 0.0
+        discount_amount = Decimal("0.00")
+
+    final_payable = max(Decimal("0.00"), subtotal - discount_amount)
+
+    session["bill_discount"] = {
+        "type": d_type,
+        "value": d_val,
+        "amount": float(discount_amount)
+    }
+    session.modified = True
+
+    return jsonify({
+        "success": True,
+        "subtotal": float(subtotal),
+        "discount_type": d_type,
+        "discount_value": d_val,
+        "discount_amount": float(discount_amount),
+        "bill_total": float(final_payable)
     })
 
 @app.route("/api/billing/products")
@@ -1319,12 +1440,15 @@ def api_cart_add():
         })
 
     session.modified = True
-    bill_total = sum(i["total"] for i in session["cart"])
+    subtotal, bill_discount, bill_total = calculate_cart_totals(session["cart"], session.get("bill_discount"))
+    session["bill_discount"] = bill_discount
 
     return jsonify({
         "success": True,
         "cart": session["cart"],
-        "bill_total": round(bill_total, 2)
+        "subtotal": subtotal,
+        "bill_discount": bill_discount,
+        "bill_total": bill_total
     })
 
 @app.route("/api/billing/cart/update-qty", methods=["POST"])
@@ -1355,8 +1479,15 @@ def api_cart_update_qty():
         cart[index]["qty"] = float(new_qty)
         cart[index]["total"] = float(price * new_qty)
         session.modified = True
-        bill_total = sum(i["total"] for i in cart)
-        return jsonify({"success": True, "cart": cart, "bill_total": round(bill_total, 2)})
+        subtotal, bill_discount, bill_total = calculate_cart_totals(cart, session.get("bill_discount"))
+        session["bill_discount"] = bill_discount
+        return jsonify({
+            "success": True,
+            "cart": cart,
+            "subtotal": subtotal,
+            "bill_discount": bill_discount,
+            "bill_total": bill_total
+        })
 
     return jsonify({"error": "Invalid cart item index"}), 400
 
@@ -1373,8 +1504,15 @@ def api_cart_update_price():
         cart[index]["price"] = float(new_price)
         cart[index]["total"] = float(new_price * qty)
         session.modified = True
-        bill_total = sum(i["total"] for i in cart)
-        return jsonify({"success": True, "cart": cart, "bill_total": round(bill_total, 2)})
+        subtotal, bill_discount, bill_total = calculate_cart_totals(cart, session.get("bill_discount"))
+        session["bill_discount"] = bill_discount
+        return jsonify({
+            "success": True,
+            "cart": cart,
+            "subtotal": subtotal,
+            "bill_discount": bill_discount,
+            "bill_total": bill_total
+        })
 
     return jsonify({"error": "Invalid cart item index"}), 400
 
@@ -1384,16 +1522,30 @@ def api_cart_remove(index):
     if 0 <= index < len(cart):
         cart.pop(index)
         session.modified = True
-        bill_total = sum(i["total"] for i in cart)
-        return jsonify({"success": True, "cart": cart, "bill_total": round(bill_total, 2)})
+        subtotal, bill_discount, bill_total = calculate_cart_totals(cart, session.get("bill_discount"))
+        session["bill_discount"] = bill_discount
+        return jsonify({
+            "success": True,
+            "cart": cart,
+            "subtotal": subtotal,
+            "bill_discount": bill_discount,
+            "bill_total": bill_total
+        })
 
     return jsonify({"error": "Invalid index"}), 400
 
 @app.route("/api/billing/cart/clear", methods=["POST"])
 def api_cart_clear():
     session["cart"] = []
+    session["bill_discount"] = {"type": None, "value": 0.0, "amount": 0.0}
     session.modified = True
-    return jsonify({"success": True, "cart": [], "bill_total": 0.0})
+    return jsonify({
+        "success": True,
+        "cart": [],
+        "subtotal": 0.0,
+        "bill_discount": session["bill_discount"],
+        "bill_total": 0.0
+    })
 
 @app.route("/api/billing/customer", methods=["POST"])
 def api_set_customer():
@@ -1415,19 +1567,23 @@ def api_hold_bill():
         return jsonify({"error": "Cart is empty, cannot park bill"}), 400
 
     conn = get_db_connection()
+    ensure_billing_discount_schema(conn)
     cur = conn.cursor()
 
-    total = sum(i["total"] for i in cart)
+    subtotal, bill_discount, bill_total = calculate_cart_totals(cart, session.get("bill_discount"))
 
     cur.execute("""
-        INSERT INTO held_bills (cart, customer_name, customer_phone, total)
-        VALUES (%s,%s,%s,%s)
+        INSERT INTO held_bills (cart, customer_name, customer_phone, total, discount_type, discount_value, discount_amount)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
         RETURNING id
     """, (
         json.dumps(cart),
         customer.get("name"),
         customer.get("phone"),
-        total
+        bill_total,
+        bill_discount.get("type"),
+        bill_discount.get("value", 0.0),
+        bill_discount.get("amount", 0.0)
     ))
     hold_id = cur.fetchone()[0]
     conn.commit()
@@ -1452,6 +1608,7 @@ def api_hold_bill():
 
     session.pop("cart", None)
     session.pop("customer", None)
+    session.pop("bill_discount", None)
 
     return jsonify({
         "success": True,
@@ -1463,10 +1620,11 @@ def api_hold_bill():
 @app.route("/api/billing/resume/<int:hold_id>", methods=["POST"])
 def api_resume_bill(hold_id):
     conn = get_db_connection()
+    ensure_billing_discount_schema(conn)
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT cart, customer_name, customer_phone
+        SELECT cart, customer_name, customer_phone, discount_type, discount_value, discount_amount
         FROM held_bills
         WHERE id=%s
     """, (hold_id,))
@@ -1487,6 +1645,14 @@ def api_resume_bill(hold_id):
         "phone": row[2] or "",
         "payment_mode": "Cash"
     }
+    session["bill_discount"] = {
+        "type": row[3],
+        "value": float(row[4] or 0.0),
+        "amount": float(row[5] or 0.0)
+    }
+
+    subtotal, bill_discount, bill_total = calculate_cart_totals(session["cart"], session["bill_discount"])
+    session["bill_discount"] = bill_discount
 
     cur.execute("DELETE FROM held_bills WHERE id=%s", (hold_id,))
     conn.commit()
@@ -1510,12 +1676,13 @@ def api_resume_bill(hold_id):
     conn.close()
 
     session.modified = True
-    bill_total = sum(i["total"] for i in session["cart"])
 
     return jsonify({
         "success": True,
         "cart": session["cart"],
         "customer": session["customer"],
+        "subtotal": subtotal,
+        "bill_discount": bill_discount,
         "bill_total": round(bill_total, 2),
         "held_bills": held_bills
     })
@@ -1542,20 +1709,27 @@ def api_checkout():
     cust_id = (data.get("customer_id") or customer.get("customer_id") or "").strip() or None
 
     conn = get_db_connection()
+    ensure_billing_discount_schema(conn)
     ensure_customer_supplier_schema(conn)
     ensure_inventory_schema(conn)
     cur = conn.cursor()
 
     try:
         invoice_no = generate_invoice_no(cur)
-        total = sum(i["total"] for i in cart)
+        subtotal, bill_discount, total = calculate_cart_totals(cart, session.get("bill_discount"))
 
-        # 1. Insert Bill (preserving customer_id if associated)
+        # 1. Insert Bill (preserving subtotal, discount, customer_id if associated)
         cur.execute("""
             INSERT INTO bills
-            (invoice_no, total, customer_name, customer_phone, payment_mode, status, customer_id)
-            VALUES (%s,%s,%s,%s,%s,'PAID',%s)
-        """, (invoice_no, total, cust_name, cust_phone, pay_mode, cust_id))
+            (invoice_no, total, subtotal, discount_type, discount_value, discount_amount,
+             customer_name, customer_phone, payment_mode, status, customer_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'PAID',%s)
+        """, (
+            invoice_no, float(total), float(subtotal),
+            bill_discount.get("type"), float(bill_discount.get("value", 0.0)),
+            float(bill_discount.get("amount", 0.0)),
+            cust_name, cust_phone, pay_mode, cust_id
+        ))
 
         # 2. Insert Items & Decrement Stock
         for item in cart:
@@ -1624,7 +1798,12 @@ def api_checkout():
             "bill.html",
             invoice_no=invoice_no,
             bill=bill_row,
-            items=items_rows
+            items=items_rows,
+            subtotal=float(subtotal),
+            discount_type=bill_discount.get("type"),
+            discount_value=float(bill_discount.get("value", 0.0)),
+            discount_amount=float(bill_discount.get("amount", 0.0)),
+            final_total=float(total)
         )
 
         year = datetime.now().strftime("%Y")
@@ -1653,13 +1832,16 @@ def api_checkout():
         cur.close()
         conn.close()
 
-    # Clear active session cart
+    # Clear active session cart & discount
     session.pop("cart", None)
     session.pop("customer", None)
+    session.pop("bill_discount", None)
 
     return jsonify({
         "success": True,
         "invoice_no": invoice_no,
+        "subtotal": float(subtotal),
+        "discount_amount": float(bill_discount.get("amount", 0.0)),
         "total": float(total),
         "customer_name": cust_name,
         "payment_mode": pay_mode,
@@ -1671,24 +1853,81 @@ def api_checkout():
 @app.route("/api/bills")
 def api_bills_list():
     search = request.args.get("search", "").strip()
+    date_val = request.args.get("date", "").strip()
+    from_date = (request.args.get("from_date") or request.args.get("start_date") or "").strip()
+    to_date = (request.args.get("to_date") or request.args.get("end_date") or "").strip()
+    payment_mode = request.args.get("payment_mode", "").strip()
+    status = request.args.get("status", "").strip()
+    page_param = request.args.get("page")
+    page_size_param = request.args.get("page_size")
+
+    is_paged = (page_param is not None or page_size_param is not None or request.args.get("paginate") == "true")
 
     conn = get_db_connection()
     cur = conn.cursor()
 
+    where_clauses = ["1=1"]
+    params = []
+
     if search:
-        cur.execute("""
-            SELECT invoice_no, customer_name, total, created_at, pdf_path, status, payment_mode
-            FROM bills
-            WHERE invoice_no ILIKE %s
-               OR customer_name ILIKE %s
-            ORDER BY created_at DESC
-        """, (f"%{search}%", f"%{search}%"))
+        where_clauses.append("(invoice_no ILIKE %s OR customer_name ILIKE %s OR COALESCE(customer_phone, '') ILIKE %s)")
+        search_pattern = f"%{search}%"
+        params.extend([search_pattern, search_pattern, search_pattern])
+
+    if date_val:
+        where_clauses.append("DATE(created_at) = %s")
+        params.append(date_val)
     else:
-        cur.execute("""
-            SELECT invoice_no, customer_name, total, created_at, pdf_path, status, payment_mode
+        if from_date:
+            where_clauses.append("DATE(created_at) >= %s")
+            params.append(from_date)
+        if to_date:
+            where_clauses.append("DATE(created_at) <= %s")
+            params.append(to_date)
+
+    if payment_mode and payment_mode.upper() != "ALL":
+        where_clauses.append("payment_mode = %s")
+        params.append(payment_mode)
+
+    if status and status.upper() != "ALL":
+        where_clauses.append("status = %s")
+        params.append(status)
+
+    where_sql = " AND ".join(where_clauses)
+
+    count_query = f"SELECT COUNT(*) FROM bills WHERE {where_sql}"
+    cur.execute(count_query, tuple(params))
+    total_count = cur.fetchone()[0]
+
+    if is_paged:
+        try:
+            page = max(1, int(page_param or 1))
+        except (ValueError, TypeError):
+            page = 1
+        try:
+            page_size = max(1, min(100, int(page_size_param or 15)))
+        except (ValueError, TypeError):
+            page_size = 15
+
+        offset = (page - 1) * page_size
+        total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
+
+        data_query = f"""
+            SELECT invoice_no, customer_name, total, created_at, pdf_path, status, payment_mode, customer_phone
             FROM bills
+            WHERE {where_sql}
             ORDER BY created_at DESC
-        """)
+            LIMIT %s OFFSET %s
+        """
+        cur.execute(data_query, tuple(params + [page_size, offset]))
+    else:
+        data_query = f"""
+            SELECT invoice_no, customer_name, total, created_at, pdf_path, status, payment_mode, customer_phone
+            FROM bills
+            WHERE {where_sql}
+            ORDER BY created_at DESC
+        """
+        cur.execute(data_query, tuple(params))
 
     bills = []
     for r in cur.fetchall():
@@ -1697,23 +1936,36 @@ def api_bills_list():
             "customer_name": r[1] or "Walk-in Customer",
             "total": float(r[2]),
             "created_at": r[3].strftime("%d-%m-%Y %H:%M:%S") if r[3] else None,
+            "created_date": r[3].strftime("%Y-%m-%d") if r[3] else None,
             "pdf_path": r[4],
             "pdf_url": f"/{r[4]}" if r[4] else f"/bill/{r[0]}/pdf",
             "status": r[5] or "PAID",
-            "payment_mode": r[6] or "Cash"
+            "payment_mode": r[6] or "Cash",
+            "customer_phone": r[7] or ""
         })
 
     cur.close()
     conn.close()
+
+    if is_paged:
+        return jsonify({
+            "bills": bills,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        })
     return jsonify(bills)
 
 @app.route("/api/bills/<invoice_no>")
 def api_bill_detail(invoice_no):
     conn = get_db_connection()
+    ensure_billing_discount_schema(conn)
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT invoice_no, customer_name, customer_phone, payment_mode, total, created_at, pdf_path, status
+        SELECT invoice_no, customer_name, customer_phone, payment_mode, total, created_at, pdf_path, status,
+               COALESCE(subtotal, total), discount_type, COALESCE(discount_value, 0), COALESCE(discount_amount, 0)
         FROM bills
         WHERE invoice_no = %s
     """, (invoice_no,))
@@ -1753,6 +2005,10 @@ def api_bill_detail(invoice_no):
         "pdf_path": bill_row[6],
         "pdf_url": f"/{bill_row[6]}" if bill_row[6] else f"/bill/{bill_row[0]}/pdf",
         "status": bill_row[7],
+        "subtotal": float(bill_row[8] if bill_row[8] is not None else bill_row[4]),
+        "discount_type": bill_row[9],
+        "discount_value": float(bill_row[10] or 0.0),
+        "discount_amount": float(bill_row[11] or 0.0),
         "items": items
     }
     return jsonify(bill)
@@ -1860,7 +2116,6 @@ def api_purchase_items(category):
     return jsonify(items)
 
 @app.route("/api/purchases", methods=["POST"])
-@admin_required
 def api_save_purchase():
     data = request.get_json() or request.form
     supplier = data.get("supplier_name", "").strip()
@@ -1967,17 +2222,31 @@ def api_save_purchase():
             """, (purchase_id, code, p_name, cost, qty, tot))
 
             if should_update_stock:
-                cur.execute("SELECT stock FROM products WHERE item_code=%s", (code,))
+                cur.execute("SELECT stock, cost_price FROM products WHERE item_code=%s", (code,))
                 s_row = cur.fetchone()
                 prev_stock = float(s_row[0]) if s_row and s_row[0] is not None else 0.0
+                prev_cost = float(s_row[1]) if s_row and s_row[1] is not None else 0.0
                 qty_added = float(qty)
+                cost_added = float(cost)
                 new_stock = prev_stock + qty_added
 
-                cur.execute("""
-                    UPDATE products
-                    SET stock = stock + %s
-                    WHERE item_code = %s
-                """, (qty, code))
+                # Weighted Average Cost calculation
+                if cost_added > 0:
+                    if prev_stock <= 0 or prev_cost <= 0:
+                        new_cost = cost_added
+                    else:
+                        new_cost = round(((prev_stock * prev_cost) + (qty_added * cost_added)) / (prev_stock + qty_added), 4)
+                    cur.execute("""
+                        UPDATE products
+                        SET stock = stock + %s, cost_price = %s
+                        WHERE item_code = %s
+                    """, (qty, new_cost, code))
+                else:
+                    cur.execute("""
+                        UPDATE products
+                        SET stock = stock + %s
+                        WHERE item_code = %s
+                    """, (qty, code))
 
                 record_stock_movement(
                     cur,
@@ -2009,7 +2278,6 @@ def api_save_purchase():
         conn.close()
 
 @app.route("/api/purchases/<int:purchase_id>/receive", methods=["POST"])
-@admin_required
 def api_receive_purchase(purchase_id):
     """Marks a pending purchase as physically Received, incrementing inventory stock exactly once."""
     conn = get_db_connection()
@@ -2025,16 +2293,26 @@ def api_receive_purchase(purchase_id):
 
         stock_updated, current_status, supplier_name = row
         if not stock_updated:
-            # Increment stock for items
-            cur.execute("SELECT item_code, quantity FROM purchase_items WHERE purchase_id=%s", (purchase_id,))
-            for (code, qty) in cur.fetchall():
-                cur.execute("SELECT stock FROM products WHERE item_code=%s", (code,))
+            # Increment stock for items and update Weighted Average Cost
+            cur.execute("SELECT item_code, quantity, cost_price FROM purchase_items WHERE purchase_id=%s", (purchase_id,))
+            for (code, qty, cost_val) in cur.fetchall():
+                cur.execute("SELECT stock, cost_price FROM products WHERE item_code=%s", (code,))
                 s_row = cur.fetchone()
                 prev_stock = float(s_row[0]) if s_row and s_row[0] is not None else 0.0
+                prev_cost = float(s_row[1]) if s_row and s_row[1] is not None else 0.0
                 qty_added = float(qty)
+                cost_added = float(cost_val or 0.0)
                 new_stock = prev_stock + qty_added
 
-                cur.execute("UPDATE products SET stock = stock + %s WHERE item_code=%s", (qty, code))
+                if cost_added > 0:
+                    if prev_stock <= 0 or prev_cost <= 0:
+                        new_cost = cost_added
+                    else:
+                        new_cost = round(((prev_stock * prev_cost) + (qty_added * cost_added)) / (prev_stock + qty_added), 4)
+                    cur.execute("UPDATE products SET stock = stock + %s, cost_price = %s WHERE item_code=%s", (qty, new_cost, code))
+                else:
+                    cur.execute("UPDATE products SET stock = stock + %s WHERE item_code=%s", (qty, code))
+
                 record_stock_movement(
                     cur,
                     item_code=code,
@@ -2061,7 +2339,6 @@ def api_receive_purchase(purchase_id):
         conn.close()
 
 @app.route("/api/purchases/<int:purchase_id>/verify", methods=["POST"])
-@admin_required
 def api_verify_purchase(purchase_id):
     """Marks a purchase consignment as Verified."""
     conn = get_db_connection()
@@ -2112,7 +2389,6 @@ def api_verify_purchase(purchase_id):
         conn.close()
 
 @app.route("/api/purchases/history")
-@admin_required
 def api_purchase_history():
     supplier = request.args.get("supplier", "").strip()
     purchase_date = request.args.get("purchase_date", "").strip()
@@ -2218,7 +2494,6 @@ def api_purchase_history():
 # ----------------- ADVANCED INVENTORY MANAGEMENT API -----------------
 
 @app.route("/api/inventory/status")
-@admin_required
 def api_inventory_status():
     conn = get_db_connection()
     ensure_inventory_schema(conn)
@@ -2528,7 +2803,6 @@ def api_inventory_movements():
 
 
 @app.route("/api/inventory/adjust", methods=["POST"])
-@admin_required
 def api_inventory_adjust():
     data = request.get_json(silent=True) or {}
     item_code = (data.get("item_code") or "").strip()
@@ -2656,11 +2930,14 @@ def api_reports():
 
     # Summary
     cur.execute(f"""
-        SELECT COUNT(*), COALESCE(SUM(b.total), 0)
+        SELECT COUNT(*), 
+               COALESCE(SUM(b.total), 0) AS net_sales,
+               COALESCE(SUM(COALESCE(b.subtotal, b.total)), 0) AS gross_sales,
+               COALESCE(SUM(COALESCE(b.discount_amount, 0)), 0) AS total_discounts
         FROM bills b
         WHERE {date_filter} AND b.status = 'PAID'
     """, params)
-    total_bills, total_sales = cur.fetchone()
+    total_bills, total_sales, gross_sales, total_discounts = cur.fetchone()
 
     # Category Sales
     cur.execute(f"""
@@ -2699,6 +2976,8 @@ def api_reports():
     return jsonify({
         "total_bills": total_bills,
         "total_sales": float(total_sales),
+        "gross_sales": float(gross_sales),
+        "total_discounts": float(total_discounts),
         "from_date": from_date or datetime.now().strftime("%Y-%m-%d"),
         "to_date": to_date or datetime.now().strftime("%Y-%m-%d"),
         "category_sales": category_sales,
@@ -3202,9 +3481,9 @@ def bills_list():
         cur.execute("""
             SELECT invoice_no, customer_name, total, created_at, pdf_path, status
             FROM bills
-            WHERE invoice_no ILIKE %s OR customer_name ILIKE %s
+            WHERE invoice_no ILIKE %s OR customer_name ILIKE %s OR COALESCE(customer_phone, '') ILIKE %s
             ORDER BY created_at DESC
-        """, (f"%{search}%", f"%{search}%"))
+        """, (f"%{search}%", f"%{search}%", f"%{search}%"))
     else:
         cur.execute("""
             SELECT invoice_no, customer_name, total, created_at, pdf_path, status
@@ -3566,7 +3845,7 @@ def api_customers_list():
                    COALESCE(SUM(b.total), 0) AS total_purchase_value,
                    MAX(b.created_at) AS last_purchase_at
             FROM customers c
-            LEFT JOIN bills b ON b.customer_id = c.customer_id AND b.status = 'PAID'
+            LEFT JOIN bills b ON b.customer_id::text = c.customer_id::text AND b.status = 'PAID'
         """
         conditions = []
         params = []
@@ -3677,7 +3956,7 @@ def api_customer_detail(customer_id):
                    COALESCE(SUM(b.total), 0) AS total_purchase_value,
                    MAX(b.created_at) AS last_purchase_at
             FROM customers c
-            LEFT JOIN bills b ON b.customer_id = c.customer_id AND b.status = 'PAID'
+            LEFT JOIN bills b ON b.customer_id::text = c.customer_id::text AND b.status = 'PAID'
             WHERE c.customer_id = %s
             GROUP BY c.id, c.customer_id, c.name, c.phone, c.email, c.address, c.status, c.registered_at
         """, (customer_id,))
@@ -3750,7 +4029,6 @@ def api_customer_update(customer_id):
 # =============================================================
 
 @app.route("/api/suppliers", methods=["GET"])
-@admin_required
 def api_suppliers_list():
     search = request.args.get("search", "").strip()
     status_filter = request.args.get("status", "").strip()
@@ -3768,7 +4046,7 @@ def api_suppliers_list():
                                      ELSE 0 END), 0) AS outstanding_payable,
                    MAX(p.purchase_date) AS last_purchase_date
             FROM suppliers s
-            LEFT JOIN purchases p ON p.supplier_id = s.supplier_id
+            LEFT JOIN purchases p ON p.supplier_id::text = s.supplier_id::text
         """
         conditions = []
         params = []
@@ -3831,7 +4109,6 @@ def api_suppliers_search():
 
 
 @app.route("/api/suppliers", methods=["POST"])
-@admin_required
 def api_suppliers_create():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
@@ -3882,7 +4159,7 @@ def api_supplier_detail(supplier_id):
                                           THEN (p.total - COALESCE(p.paid_amount, 0))
                                      ELSE 0 END), 0)
             FROM suppliers s
-            LEFT JOIN purchases p ON p.supplier_id = s.supplier_id
+            LEFT JOIN purchases p ON p.supplier_id::text = s.supplier_id::text
             WHERE s.supplier_id = %s
             GROUP BY s.id, s.supplier_id, s.name, s.contact_person, s.phone, s.email,
                      s.address, s.tax_number, s.opening_balance, s.status, s.registered_at
@@ -4023,6 +4300,7 @@ def api_get_expense_categories():
     return jsonify(cats)
 
 @app.route("/api/expenses/categories", methods=["POST"])
+@admin_required
 def api_add_expense_category():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
@@ -4175,6 +4453,7 @@ def api_create_expense():
         cur.close(); conn.close()
 
 @app.route("/api/expenses/<int:exp_id>", methods=["GET"])
+@admin_required
 def api_get_expense_detail(exp_id):
     conn = get_db_connection()
     ensure_expense_schema(conn)
@@ -4198,6 +4477,7 @@ def api_get_expense_detail(exp_id):
     })
 
 @app.route("/api/expenses/<int:exp_id>", methods=["PUT", "POST"])
+@admin_required
 def api_update_expense(exp_id):
     data = request.form.to_dict() if request.form else (request.get_json(silent=True) or request.values.to_dict() if hasattr(request, 'values') else {})
     receipt_file = request.files.get("receipt") if request.files else None
@@ -4251,6 +4531,7 @@ def api_update_expense(exp_id):
         cur.close(); conn.close()
 
 @app.route("/api/expenses/<int:exp_id>", methods=["DELETE"])
+@admin_required
 def api_delete_expense(exp_id):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -4342,14 +4623,17 @@ def calculate_profit_for_range(start_date, end_date):
 
     # --- Net Sales (completed sales only) ---
     cur.execute("""
-        SELECT COALESCE(SUM(total), 0)
+        SELECT COALESCE(SUM(total), 0),
+               COALESCE(SUM(COALESCE(subtotal, total)), 0),
+               COALESCE(SUM(COALESCE(discount_amount, 0)), 0)
         FROM bills
         WHERE DATE(created_at) >= %s AND DATE(created_at) <= %s AND status = 'PAID'
     """, (start_date, end_date))
-    total_sales = float(cur.fetchone()[0])
-
-    # We don't have a separate discount/return column, so net_sales = total_sales
-    net_sales = total_sales
+    net_sales_row, gross_sales_row, discounts_row = cur.fetchone()
+    gross_sales = float(gross_sales_row)
+    discounts = float(discounts_row)
+    net_sales = float(net_sales_row)
+    total_sales = gross_sales
 
     # --- COGS ---
     # Use cost_at_sale if populated; fall back to product cost_price
@@ -4383,7 +4667,9 @@ def calculate_profit_for_range(start_date, end_date):
     cur.close(); conn.close()
 
     return {
+        "gross_sales": round(gross_sales, 2),
         "total_sales": round(total_sales, 2),
+        "discounts": round(discounts, 2),
         "net_sales": round(net_sales, 2),
         "cogs": round(cogs, 2),
         "gross_profit": round(gross_profit, 2),
@@ -4714,6 +5000,7 @@ def api_payables_purchases():
 
 
 @app.route("/api/payables/purchases/<int:purchase_id>", methods=["GET"])
+@admin_required
 def api_payables_purchase_detail(purchase_id):
     """
     Detailed view of a single purchase with line items, payments history, and calculated balances.
@@ -4802,6 +5089,7 @@ def api_payables_purchase_detail(purchase_id):
 
 
 @app.route("/api/payables/payments", methods=["POST"])
+@admin_required
 def api_record_purchase_payment():
     """
     Record an Accounts Payable payment against a purchase:
@@ -4898,6 +5186,7 @@ def api_record_purchase_payment():
 
 
 @app.route("/api/payables/purchases/<int:purchase_id>/due-date", methods=["PATCH", "POST"])
+@admin_required
 def api_update_purchase_due_date(purchase_id):
     """Update or assign a due date to a purchase."""
     data = request.get_json() or request.form

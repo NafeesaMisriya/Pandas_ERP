@@ -19,7 +19,9 @@ import {
   X,
   Layers,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  Tag,
+  Percent
 } from 'lucide-react';
 import { billingApi, customersApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -43,6 +45,12 @@ export const Billing = () => {
   const [quickCustForm, setQuickCustForm] = useState({ name: '', phone: '', email: '', address: '' });
   const [savingQuickCust, setSavingQuickCust] = useState(false);
   const [billTotal, setBillTotal] = useState(0);
+  const [subtotal, setSubtotal] = useState(0);
+  const [discountType, setDiscountType] = useState(''); // '' | 'fixed' | 'percentage'
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [qtyInputs, setQtyInputs] = useState({});
+  const [targetAmounts, setTargetAmounts] = useState({});
   const [heldBills, setHeldBills] = useState([]);
   const [showHeldModal, setShowHeldModal] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
@@ -63,7 +71,13 @@ export const Billing = () => {
           payment_mode: data.customer.payment_mode || 'Cash',
         });
       }
+      setSubtotal(data.subtotal !== undefined ? data.subtotal : (data.bill_total || 0));
       setBillTotal(data.bill_total || 0);
+      if (data.bill_discount) {
+        setDiscountType(data.bill_discount.type || '');
+        setDiscountValue(data.bill_discount.value ? String(data.bill_discount.value) : '');
+        setDiscountAmount(data.bill_discount.amount || 0);
+      }
       setHeldBills(data.held_bills || []);
 
       if (data.categories && data.categories.length > 0 && !selectedCategory) {
@@ -96,12 +110,23 @@ export const Billing = () => {
     fetchCategoryProducts();
   }, [selectedCategory]);
 
+  // Sync state helper
+  const syncCartResponse = (data) => {
+    setCart(data.cart || []);
+    setSubtotal(data.subtotal !== undefined ? data.subtotal : (data.bill_total || 0));
+    setBillTotal(data.bill_total !== undefined ? data.bill_total : 0);
+    if (data.bill_discount) {
+      setDiscountType(data.bill_discount.type || '');
+      setDiscountValue(data.bill_discount.value ? String(data.bill_discount.value) : '');
+      setDiscountAmount(data.bill_discount.amount || 0);
+    }
+  };
+
   // Add to cart
   const handleAddToCart = async (itemCode, qty = 1) => {
     try {
       const res = await billingApi.addToCart(itemCode, qty);
-      setCart(res.data.cart);
-      setBillTotal(res.data.bill_total);
+      syncCartResponse(res.data);
       toast.success('Item added to cart');
     } catch (err) {
       console.error(err);
@@ -125,8 +150,7 @@ export const Billing = () => {
     }
     try {
       const res = await billingApi.updateQty(index, newQty);
-      setCart(res.data.cart);
-      setBillTotal(res.data.bill_total);
+      syncCartResponse(res.data);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || 'Could not update quantity');
@@ -138,8 +162,7 @@ export const Billing = () => {
     if (newPrice < 0) return;
     try {
       const res = await billingApi.updatePrice(index, newPrice);
-      setCart(res.data.cart);
-      setBillTotal(res.data.bill_total);
+      syncCartResponse(res.data);
     } catch (err) {
       console.error(err);
       toast.error('Could not update price');
@@ -150,8 +173,17 @@ export const Billing = () => {
   const handleRemoveItem = async (index) => {
     try {
       const res = await billingApi.removeItem(index);
-      setCart(res.data.cart);
-      setBillTotal(res.data.bill_total);
+      syncCartResponse(res.data);
+      setQtyInputs((prev) => {
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
+      setTargetAmounts((prev) => {
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
       toast.info('Item removed from cart');
     } catch (err) {
       console.error(err);
@@ -164,9 +196,45 @@ export const Billing = () => {
     if (!cart.length) return;
     try {
       const res = await billingApi.clearCart();
-      setCart(res.data.cart);
-      setBillTotal(0);
+      syncCartResponse(res.data);
+      setQtyInputs({});
+      setTargetAmounts({});
       toast.info('Cart cleared');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Apply overall bill discount
+  const handleApplyDiscount = async () => {
+    if (!discountType) return;
+    const val = parseFloat(discountValue) || 0;
+    try {
+      const res = await billingApi.setDiscount({
+        type: discountType,
+        value: val
+      });
+      setSubtotal(res.data.subtotal);
+      setDiscountType(res.data.discount_type || '');
+      setDiscountValue(res.data.discount_value ? String(res.data.discount_value) : '');
+      setDiscountAmount(res.data.discount_amount);
+      setBillTotal(res.data.bill_total);
+      toast.success('Bill discount applied successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to apply discount');
+    }
+  };
+
+  // Clear overall bill discount
+  const handleClearDiscount = async () => {
+    try {
+      const res = await billingApi.clearDiscount();
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountAmount(0);
+      setSubtotal(res.data.subtotal);
+      setBillTotal(res.data.bill_total);
+      toast.info('Discount removed');
     } catch (err) {
       console.error(err);
     }
@@ -182,6 +250,12 @@ export const Billing = () => {
       const res = await billingApi.holdBill();
       setCart([]);
       setBillTotal(0);
+      setSubtotal(0);
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountAmount(0);
+      setQtyInputs({});
+      setTargetAmounts({});
       setCustomer({ customer_id: '', name: '', phone: '', payment_mode: 'Cash' });
       setHeldBills(res.data.held_bills || []);
       toast.success('Current transaction parked successfully.');
@@ -195,8 +269,9 @@ export const Billing = () => {
   const handleResumeBill = async (holdId) => {
     try {
       const res = await billingApi.resumeBill(holdId);
-      setCart(res.data.cart);
-      setBillTotal(res.data.bill_total);
+      syncCartResponse(res.data);
+      setQtyInputs({});
+      setTargetAmounts({});
       if (res.data.customer) {
         setCustomer({
           customer_id: res.data.customer.customer_id || '',
@@ -290,6 +365,12 @@ export const Billing = () => {
       setCheckoutResult(res.data);
       setCart([]);
       setBillTotal(0);
+      setSubtotal(0);
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountAmount(0);
+      setQtyInputs({});
+      setTargetAmounts({});
       setCustomer({ customer_id: '', name: '', phone: '', payment_mode: 'Cash' });
       toast.success(`Invoice ${res.data.invoice_no} generated!`);
     } catch (err) {
@@ -347,11 +428,10 @@ export const Billing = () => {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-[0.98] ${
-                selectedCategory === cat
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-[0.98] ${selectedCategory === cat
                   ? 'bg-[#F5B900] text-[#111111] shadow-sm border border-gold-600/40'
                   : 'bg-slate-100/80 text-slate-700 hover:bg-gold-50 hover:text-slate-900 hover:border-gold-300 border border-transparent'
-              }`}
+                }`}
             >
               {cat}
             </button>
@@ -411,11 +491,10 @@ export const Billing = () => {
                       key={p.item_code}
                       onClick={() => !isOutOfStock && handleAddToCart(p.item_code)}
                       disabled={isOutOfStock}
-                      className={`p-3.5 rounded-xl border text-left transition-all duration-150 group flex flex-col justify-between relative overflow-hidden ${
-                        isOutOfStock
+                      className={`p-3.5 rounded-xl border text-left transition-all duration-150 group flex flex-col justify-between relative overflow-hidden ${isOutOfStock
                           ? 'bg-slate-50/80 border-slate-200 opacity-60 cursor-not-allowed'
                           : 'bg-white hover:bg-gold-50/30 border-slate-200/80 hover:border-[#F5B900] hover:shadow-md active:scale-[0.98]'
-                      }`}
+                        }`}
                     >
                       <div>
                         <div className="flex items-center justify-between text-[10px] font-bold">
@@ -427,8 +506,8 @@ export const Billing = () => {
                               isOutOfStock
                                 ? 'text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded'
                                 : isLowStock
-                                ? 'text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded'
-                                : 'text-slate-500'
+                                  ? 'text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded'
+                                  : 'text-slate-500'
                             }
                           >
                             {isOutOfStock ? 'Out of Stock' : `Stock: ${formatQuantity(p.stock, p.unit)}`}
@@ -499,7 +578,7 @@ export const Billing = () => {
                   <div key={index} className="py-2.5 px-2 flex items-center justify-between gap-3 text-xs hover:bg-gold-50/30 rounded-lg transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-800 truncate">{item.name}</div>
-                      <div className="text-slate-400 text-[11px] mt-0.5 flex items-center gap-1.5">
+                      <div className="text-slate-400 text-[11px] mt-0.5 flex flex-wrap items-center gap-1.5">
                         <span className="font-mono text-slate-500 font-semibold">{item.code}</span>
                         <span>•</span>
                         <span>₹</span>
@@ -509,12 +588,39 @@ export const Billing = () => {
                           value={item.price}
                           onChange={(e) => handleUpdatePrice(index, parseFloat(e.target.value) || 0)}
                           className="w-16 px-1.5 py-0.5 border border-slate-200 rounded font-bold text-slate-800 text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-gold-500 focus:border-gold-500"
+                          title="Unit Selling Price"
                         />
                         <span>/{item.unit || 'pc'}</span>
+                        <div className="flex items-center gap-1 ml-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                          <span className="text-[10px] text-slate-500 font-bold">Target ₹:</span>
+                          <input
+                            type="number"
+                            step="1"
+                            placeholder="e.g. 200"
+                            value={targetAmounts[index] || ''}
+                            onChange={(e) => {
+                              const rawT = e.target.value;
+                              setTargetAmounts((prev) => ({ ...prev, [index]: rawT }));
+                              if (rawT !== '' && !isNaN(Number(rawT)) && Number(rawT) > 0 && item.price > 0) {
+                                const targetAmt = Number(rawT);
+                                const calculatedQty = targetAmt / item.price;
+                                if (isIntegerUnit(item.unit)) {
+                                  const roundedInt = Math.max(1, Math.round(calculatedQty));
+                                  handleUpdateQty(index, roundedInt);
+                                } else {
+                                  const rounded = Math.round(calculatedQty * 1000) / 1000;
+                                  handleUpdateQty(index, rounded);
+                                }
+                              }
+                            }}
+                            className="w-14 px-1 py-0.2 text-[10px] font-bold text-slate-800 bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-gold-500"
+                            title="Auto-calculate quantity from target amount"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Qty modifiers with decimal input support */}
+                    {/* Qty modifiers with decimal input support and backspace protection */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => handleUpdateQty(index, item.qty - 1)}
@@ -524,10 +630,37 @@ export const Billing = () => {
                       </button>
                       <input
                         type="number"
-                        step={isIntegerUnit(item.unit) ? "1" : "0.01"}
-                        value={item.qty}
-                        onChange={(e) => handleUpdateQty(index, parseFloat(e.target.value) || 0)}
-                        className="w-12 text-center py-1 font-bold border border-slate-200 rounded-lg text-slate-800 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gold-500 focus:border-gold-500"
+                        step={isIntegerUnit(item.unit) ? "1" : "0.001"}
+                        value={qtyInputs[index] !== undefined ? qtyInputs[index] : item.qty}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setQtyInputs((prev) => ({ ...prev, [index]: raw }));
+                          if (raw !== '' && raw !== '-') {
+                            const parsed = parseFloat(raw);
+                            if (!isNaN(parsed) && parsed > 0) {
+                              handleUpdateQty(index, parsed);
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value;
+                          const parsed = parseFloat(raw);
+                          if (!raw || isNaN(parsed) || parsed <= 0) {
+                            setQtyInputs((prev) => {
+                              const copy = { ...prev };
+                              delete copy[index];
+                              return copy;
+                            });
+                            toast.warning('Invalid quantity – restored previous value');
+                          } else {
+                            setQtyInputs((prev) => {
+                              const copy = { ...prev };
+                              delete copy[index];
+                              return copy;
+                            });
+                          }
+                        }}
+                        className="w-14 text-center py-1 font-bold border border-slate-200 rounded-lg text-slate-800 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gold-500 focus:border-gold-500 shadow-xs"
                       />
                       <button
                         onClick={() => handleUpdateQty(index, item.qty + 1)}
@@ -646,11 +779,10 @@ export const Billing = () => {
                       key={mode}
                       type="button"
                       onClick={() => setCustomer({ ...customer, payment_mode: mode })}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition active:scale-95 ${
-                        customer.payment_mode === mode
+                      className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition active:scale-95 ${customer.payment_mode === mode
                           ? 'bg-gold-500 text-navy-900 border-gold-600 shadow-sm font-black'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-gold-50/50 hover:border-gold-300 shadow-xs'
-                      }`}
+                        }`}
                     >
                       {mode === 'Cash' && <DollarSign className="w-3.5 h-3.5" />}
                       {mode === 'UPI' && <Smartphone className="w-3.5 h-3.5" />}
@@ -661,20 +793,100 @@ export const Billing = () => {
                 </div>
               </div>
 
-              {/* Total & Checkout Actions */}
-              <div className="pt-3 border-t border-slate-200">
-                <div className="p-3.5 bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl text-white mb-3 flex items-center justify-between border border-gold-500/30">
-                  <div>
-                    <span className="text-[11px] font-bold text-gold-400/90 uppercase tracking-wider block">
-                      Payable Amount
+              {/* Bill Discount Section */}
+              {cart.length > 0 && (
+                <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-[#F5B900]" />
+                      Overall Bill Discount
                     </span>
-                    <span className="text-xs text-slate-300 font-semibold">
-                      Mode: {customer.payment_mode}
+                    {discountAmount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearDiscount}
+                        className="text-[11px] text-rose-500 hover:text-rose-700 font-bold"
+                      >
+                        Remove Discount
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={discountType}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        setDiscountType(t);
+                        if (!t) {
+                          handleClearDiscount();
+                        }
+                      }}
+                      className="text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-gold-500"
+                    >
+                      <option value="">No Discount</option>
+                      <option value="fixed">Fixed (₹)</option>
+                      <option value="percentage">Percentage (%)</option>
+                    </select>
+
+                    {discountType && (
+                      <>
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            step={discountType === 'percentage' ? '0.1' : '1'}
+                            min="0"
+                            max={discountType === 'percentage' ? '100' : subtotal}
+                            placeholder={discountType === 'percentage' ? '0–100%' : '₹ Amount'}
+                            value={discountValue}
+                            onChange={(e) => setDiscountValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleApplyDiscount()}
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg font-bold text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-gold-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleApplyDiscount}
+                          className="px-3 py-1.5 bg-[#F5B900] hover:bg-[#E5AC00] text-[#111111] rounded-lg text-xs font-black transition active:scale-95 shadow-xs"
+                        >
+                          Apply
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Total & Checkout Actions */}
+              <div className="pt-2 border-t border-slate-200">
+                <div className="p-3.5 bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl text-white mb-3 border border-gold-500/30 space-y-1.5">
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-xs text-slate-300 pb-1 border-b border-white/10">
+                      <span>Subtotal:</span>
+                      <span className="font-bold">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-xs text-amber-300 pb-1 border-b border-white/10">
+                      <span>
+                        Discount ({discountType === 'percentage' ? `${discountValue}%` : 'Fixed'}):
+                      </span>
+                      <span className="font-bold">−₹{discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-0.5">
+                    <div>
+                      <span className="text-[11px] font-bold text-gold-400/90 uppercase tracking-wider block">
+                        {discountAmount > 0 ? 'Net Payable' : 'Payable Amount'}
+                      </span>
+                      <span className="text-xs text-slate-300 font-semibold">
+                        Mode: {customer.payment_mode}
+                      </span>
+                    </div>
+                    <span className="text-2xl font-black text-gold-400 tracking-tight">
+                      ₹{billTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <span className="text-2xl font-black text-gold-400 tracking-tight">
-                    ₹{billTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">

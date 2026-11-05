@@ -84,18 +84,6 @@ export const Dashboard = () => {
       actionText: 'View Invoices',
     },
     {
-      title: 'TOTAL PURCHASES',
-      value: `₹${(stats?.total_purchases_sum || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-      subtitle: `${stats?.total_purchases_count || 0} inward supplier consignments`,
-      icon: Package,
-      isPrimary: false,
-      iconColor: 'text-[#F5B900]',
-      iconBg: 'bg-amber-50 border border-amber-200 text-[#F5B900]',
-      cardBorder: 'border border-slate-200/90 shadow-xs hover:border-amber-300',
-      action: () => navigate('/purchases/history'),
-      actionText: 'View Purchases',
-    },
-    {
       title: 'LOW STOCK ALERTS',
       value: `${stats?.low_stock_count || 0} items`,
       subtitle: 'Between 1 and 5 units remaining',
@@ -227,7 +215,7 @@ export const Dashboard = () => {
       </div>
 
       {/* 3. KPI Summary Cards – All White Backgrounds with Gold Accents */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summaryCards.map((card, idx) => {
           const Icon = card.icon;
           return (
