@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PANDAS – Reports</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="sec-bg">
+
+<div class="navbar">
+    <a href="/">🏠 Dashboard</a>
+</div>
+<img src="/static/images/logo.png" class="logo">
+<header class="topbar">
+<h2>📊 Sales Report</h2>
+</header>
+
+
+<form method="POST" style="margin-bottom:20px;">
+    <a href="/z-report" class="checkout-btn">
+        📊 Daily Z-Report
+    </a>
+
+    <label>From:</label>
+    <input type="date" name="from_date" value="{{ from_date }}">
+
+    <label>To:</label>
+    <input type="date" name="to_date" value="{{ to_date }}">
+
+    <button type="submit">🔍 View Report</button>
+
+    <a href="/reports" style="margin-left:10px;">Today</a>
+</form>
+
+<p>Total Bills: {{ summary[0] }}</p>
+<h3 style="color: #605206;font-size: 28px">Total Sales: ₹ {{ summary[1] }}</h3>
+
+<hr>
+
+<h3 style="color: #000000;">Category-wise Sales</h3>
+<table border="1">
+<tr><th>Category</th><th>Total</th></tr>
+{% for c in category_sales %}
+<tr><td>{{ c[0] }}</td><td>₹ {{ c[1] }}</td></tr>
+{% endfor %}
+</table>
+
+<hr>
+
+<h3>Item-wise Sales</h3>
+<table border="1">
+<tr><th>Item</th><th>Qty</th><th>Total</th></tr>
+{% for i in items %}
+<tr>
+<td>{{ i[0] }}</td>
+<td>{{ i[1] }}</td>
+<td>₹ {{ i[2] }}</td>
+</tr>
+{% endfor %}
+</table>
+
+<button onclick="window.print()">🖨 Print</button>
+
+</body>
+</html>
