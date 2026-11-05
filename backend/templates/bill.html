@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PANDAS – Bill</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #000;
+        }
+
+        /* Hide navbar while printing */
+        @media print {
+            .navbar {
+                display: none;
+            }
+        }
+
+        .navbar {
+            padding: 10px;
+            background: #f5f5f5;
+        }
+
+        .navbar a {
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .bill-container {
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        /* HEADER */
+        .bill-header {
+            text-align: center;
+        }
+
+        .logo-bill {
+            height: 60px;
+            margin-bottom: 5px;
+        }
+
+        .shop-name {
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .shop-subtitle {
+            font-size: 16px;
+            margin-top: -5px;
+        }
+        .bill-text {
+            font-size: 13px;
+            margin: 2px 0;
+        }
+
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 12px 0;
+        }
+
+        /* BILL INFO */
+        .bill-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+            padding: 6px 4px;
+        }
+
+        td {
+            padding: 6px 4px;
+        }
+
+        th:nth-child(2),
+        th:nth-child(3),
+        th:nth-child(4),
+        td:nth-child(2),
+        td:nth-child(3),
+        td:nth-child(4) {
+            text-align: right;
+        }
+
+        /* TOTAL */
+        .total-box {
+            margin-top: 15px;
+            text-align: right;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        /* FOOTER */
+        .footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        /* QR (optional – safe even if not used) */
+        .qr-box {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .qr-box img {
+            height: 140px;
+        }
+        @media print {
+            .navbar,
+            .no-print {
+                display: none;
+            }
+        }
+
+    </style>
+</head>
+
+<body onload="window.print()">
+
+<div class="navbar">
+    <a href="/">🏠 Dashboard</a>
+</div>
+
+<div class="bill-container">
+
+    <!-- HEADER -->
+    <div class="bill-header">
+        <div class="shop-name">PANDAS</div>
+        <div class="shop-subtitle">NUTS & CHOCOLATES</div>
+        <div class="bill-text">Near Bus Stop, Kottappuram</div>
+        <div class="bill-text"> +91-9847345005</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- BILL INFO -->
+    <div class="bill-info">
+        <div>
+            <strong>Invoice No:</strong> {{ invoice_no }}
+        </div>
+        <div>
+            <strong>Date:</strong> {{ bill[1].strftime("%d-%m-%Y %H:%M:%S") }}
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ITEMS TABLE -->
+    <table>
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Price</th>
+                <th>Qty</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in items %}
+            <tr>
+                <td>{{ i[0] }}</td>
+                <td>₹{{ "%.2f"|format(i[1]) }}</td>
+                <td>{{ i[2] }}</td>
+                <td>₹{{ "%.2f"|format(i[3]) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <!-- TOTAL -->
+    <div class="total-box">
+        TOTAL : ₹{{ "%.2f"|format(bill[0]) }}
+    </div>
+
+    <div class="no-print">
+        <a href="/bill/{{ invoice_no }}/pdf">Download PDF</a>
+    </div>
+
+
+    <!-- QR PLACEHOLDER (optional future use) -->
+    <!--
+    <div class="qr-box">
+        <img src="/static/images/upi_qr.png">
+        <div class="bill-text">Scan to Pay</div>
+    </div>
+    -->
+
+    <!-- FOOTER -->
+    <div class="footer">
+        Thank you... <br>
+        Visit Again
+    </div>
+
+</div>
+
+</body>
+</html>

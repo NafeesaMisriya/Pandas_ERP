@@ -1,0 +1,130 @@
+item_code,item_name,price,stock,unit,category
+N101,Almond Jumbo,1200.0,8.0,kg,Nuts
+N102,Almond,1100.0,9.0,kg,Nuts
+N103,Pista,1350.0,7.5,kg,Nuts
+N104,Cashew 320,1100.0,10.0,kg,Nuts
+N105,Cashew 240,1200.0,8.5,kg,Nuts
+N106,Cashew 210,1300.0,9.5,kg,Nuts
+N107,Cashew Roast,1250.0,9.5,kg,Nuts
+N108,Cashew Chilli,1400.0,10.0,kg,Nuts
+N109,Cashew Pepper,1400.0,8.5,kg,Nuts
+N110,Cashew Skin,1100.0,9.5,kg,Nuts
+N111,Walnut,1850.0,10.0,kg,Nuts
+C101,Dairy milk family,130.0,20.0,pc,Chocolates
+C102,Dairy milk Malaysia,200.0,20.0,pc,Chocolates
+C103,Dairy milk silk,100.0,20.0,pc,Chocolates
+C104,Dairy milk silk big,220.0,20.0,pc,Chocolates
+C105,Dairy milk oreo,65.0,20.0,pc,Chocolates
+C106,Dairy milk,60.0,20.0,pc,Chocolates
+C107,Kitkat,35.0,20.0,pc,Chocolates
+C108,Kitkat,25.0,15.0,pc,Chocolates
+C109,Kitkat,20.0,20.0,pc,Chocolates
+C110,Kitkat,10.0,20.0,pc,Chocolates
+C111,Galaxy family,199.0,19.0,pc,Chocolates
+C112,Galaxy,50.0,18.0,pc,Chocolates
+C113,Galaxy,20.0,20.0,pc,Chocolates
+C114,Galaxy,10.0,20.0,pc,Chocolates
+C115,Crispello,40.0,20.0,pc,Chocolates
+C116,Crispello,10.0,20.0,pc,Chocolates
+C117,Milkybar,20.0,18.0,pc,Chocolates
+C118,Milkybar,10.0,15.0,pc,Chocolates
+C119,Milkybar,5.0,20.0,pc,Chocolates
+C120,Munch,20.0,20.0,pc,Chocolates
+C121,Munch,10.0,20.0,pc,Chocolates
+C122,Munch,5.0,20.0,pc,Chocolates
+C123,Kinder bueno,100.0,20.0,pc,Chocolates
+C124,Kinder joy,50.0,15.0,pc,Chocolates
+C125,Kinder cream,30.0,20.0,pc,Chocolates
+C126,Kunafa,220.0,20.0,pc,Chocolates
+C127,Kunafa,60.0,20.0,pc,Chocolates
+C128,5 star,10.0,20.0,pc,Chocolates
+C129,5 star,5.0,20.0,pc,Chocolates
+C130,5 star 3D,45.0,20.0,pc,Chocolates
+C131,Snickers,50.0,20.0,pc,Chocolates
+C132,Snickers,35.0,20.0,pc,Chocolates
+C133,Snickers,20.0,15.0,pc,Chocolates
+C134,Snickers,10.0,20.0,pc,Chocolates
+C135,Nestle classic f&n,50.0,20.0,pc,Chocolates
+C136,Nestle classic,10.0,19.0,pc,Chocolates
+C137,Bounty,80.0,20.0,pc,Chocolates
+C138,Bounty,35.0,20.0,pc,Chocolates
+C139,Fuse,20.0,20.0,pc,Chocolates
+C140,Fuse,45.0,20.0,pc,Chocolates
+C141,VIP,20.0,20.0,pc,Chocolates
+C142,Go fresh,20.0,20.0,pc,Chocolates
+C143,Alpella,20.0,20.0,pc,Chocolates
+C144,Alvido,20.0,20.0,pc,Chocolates
+C145,Hershey's,65.0,18.0,pc,Chocolates
+C146,Hershey's,60.0,20.0,pc,Chocolates
+C147,Hershey's,140.0,18.0,pc,Chocolates
+C148,Hershey's,160.0,20.0,pc,Chocolates
+C149,Safari,20.0,20.0,pc,Chocolates
+C150,Nani,30.0,20.0,pc,Chocolates
+C151,Chocofero,5.0,20.0,pc,Chocolates
+C152,Cotco,5.0,20.0,pc,Chocolates
+C153,Turkey chocolates,550.0,20.0,kg,Chocolates
+C154,Banjem,550.0,20.0,kg,Chocolates
+C155,Vigos,550.0,20.0,kg,Chocolates
+C156,Prenda,550.0,20.0,kg,Chocolates
+C157,Lexus,550.0,20.0,kg,Chocolates
+C158,Bayfin,350.0,20.0,kg,Chocolates
+C159,Thai chew,580.0,20.0,kg,Chocolates
+C160,Delite,350.0,20.0,kg,Chocolates
+C161,Talent,350.0,20.0,kg,Chocolates
+C162,Eclairs,350.0,20.0,kg,Chocolates
+C163,Eclairs,280.0,20.0,kg,Chocolates
+C164,Fudge,690.0,20.0,kg,Chocolates
+C165,Kan choco,350.0,20.0,kg,Chocolates
+D101,Sukari,380.0,10.0,kg,Dates
+D102,Safavi,490.0,10.0,kg,Dates
+D103,Mariyam,240.0,10.0,kg,Dates
+D104,Sukari dry,450.0,10.0,kg,Dates
+D105,Mashrook,450.0,10.0,kg,Dates
+D106,Seghai,450.0,10.0,kg,Dates
+F101,Baby fig,1000.0,10.0,kg,Dry Fruits
+F102,Turkey fig,1400.0,10.0,kg,Dry Fruits
+F103,Fig big,1450.0,10.0,kg,Dry Fruits
+F104,Fig small,1550.0,10.0,kg,Dry Fruits
+F105,Black berry,600.0,10.0,kg,Dry Fruits
+F106,Red berry,700.0,10.0,kg,Dry Fruits
+F107,Kiwi (Y),700.0,10.0,kg,Dry Fruits
+F108,Kiwi (G),700.0,10.0,kg,Dry Fruits
+F109,Dry mango,800.0,10.0,kg,Dry Fruits
+F110,Dry amla,380.0,10.0,kg,Dry Fruits
+F111,Dry cherry,900.0,10.0,kg,Dry Fruits
+F112,Jelly,400.0,10.0,kg,Dry Fruits
+F113,Dry fruits cut,750.0,10.0,kg,Dry Fruits
+F114,Cumin candy,200.0,10.0,kg,Dry Fruits
+F115,Tuti fruty,400.0,10.0,kg,Dry Fruits
+F116,Padam chocolates,1100.0,10.0,kg,Dry Fruits
+F117,Cherries,200.0,10.0,kg,Dry Fruits
+F118,Pineapple coin,700.0,10.0,kg,Dry Fruits
+F119,Peanut,300.0,10.0,kg,Dry Fruits
+F120,Stone choco,450.0,10.0,kg,Dry Fruits
+F121,Tamarind candy,250.0,10.0,kg,Dry Fruits
+W101,Moosi,120.0,20.0,pc,Drinks
+W102,Redbull,125.0,20.0,pc,Drinks
+W103,Maa,10.0,20.0,pc,Drinks
+W104,Basil seed,75.0,20.0,pc,Drinks
+W105,Barbican,120.0,20.0,pc,Drinks
+W106,Red blue,100.0,20.0,pc,Drinks
+W107,Red boom,70.0,20.0,pc,Drinks
+W108,Rani,70.0,20.0,pc,Drinks
+W109,Monster,110.0,20.0,pc,Drinks
+W110,Cavin's pouch,45.0,20.0,pc,Drinks
+W111,Cavin's,30.0,20.0,pc,Drinks
+W112,Maa,40.0,20.0,pc,Drinks
+W113,Water,20.0,20.0,pc,Drinks
+W114,Seven up,45.0,20.0,pc,Drinks
+W115,Seven up,90.0,20.0,pc,Drinks
+W116,Seven up,20.0,20.0,pc,Drinks
+W117,Pepsi,40.0,19.0,pc,Drinks
+W118,Pepsi,20.0,17.0,pc,Drinks
+M101,Rice flour,65.0,25.0,kg,Mill Products
+M102,Chilli powder,480.0,15.0,kg,Mill Products
+M103,Coconut oil,520.0,20.0,ltr,Mill Products
+M104,Puttu podi (white),70.0,30.0,kg,Mill Products
+M105,Puttu podi (red),75.0,25.0,kg,Mill Products
+M106,Ragi flour,90.0,20.0,kg,Mill Products
+M107,Wheat flour,55.0,30.0,kg,Mill Products
+M108,Roasted rice flour,80.0,20.0,kg,Mill Products
