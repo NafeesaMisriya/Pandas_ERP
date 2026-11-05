@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="static/images/logoo.png" alt="PANDAS ERP Logo" width="240" />
+  <img src="static/images/logo.png" alt="PANDAS ERP Logo" width="240" />
 
   # 🐼 PANDAS ERP
   ### Modern Retail Point of Sale (POS), Inventory Control & Financial Management System
