@@ -53,6 +53,8 @@ export const purchasesApi = {
   getItems: (category) => api.get(`/purchases/items/${category}`),
   save: (data) => api.post('/purchases', data),
   getHistory: (params) => api.get('/purchases/history', { params }),
+  receive: (id) => api.post(`/purchases/${id}/receive`),
+  verify: (id) => api.post(`/purchases/${id}/verify`),
 };
 
 export const reportsApi = {

@@ -8,7 +8,11 @@ import {
   Eye,
   CheckCircle2,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  CreditCard,
+  DollarSign,
+  Smartphone
 } from 'lucide-react';
 import { billsApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -21,6 +25,7 @@ export const Bills = () => {
 
   const [bills, setBills] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
   // Selected bill modal
@@ -73,94 +78,139 @@ export const Bills = () => {
     }
   };
 
+  const filteredBills = bills.filter((b) => {
+    if (paymentFilter === 'ALL') return true;
+    return b.payment_mode === paymentFilter;
+  });
+
   return (
-    <div className="space-y-6">
-      {/* Header & Search */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
-            <FileText className="w-5 h-5" />
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Context Breadcrumb & Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <span>Sales</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[#F5B900] font-bold">Invoices &amp; Receipts</span>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Sales Invoices & Billing Archive</h2>
-            <p className="text-xs text-slate-500">Search customer receipts, open PDF bills, and manage cancellations</p>
-          </div>
+          <p className="text-xs text-slate-500 mt-1">Search customer transactions, open archived PDF bills, and audit register slips</p>
         </div>
 
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search invoice # or customer..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs font-medium"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Payment Mode Filter Pills */}
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-400 font-bold px-2 uppercase tracking-wider text-[11px]">Payment:</span>
+        {['ALL', 'Cash', 'UPI', 'Card'].map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setPaymentFilter(mode)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 ${
+              paymentFilter === mode
+                ? 'bg-[#F5B900] text-[#111111] shadow-sm font-black'
+                : 'bg-slate-100/80 text-slate-600 hover:bg-gold-50/60 hover:text-slate-900'
+            }`}
+          >
+            {mode === 'ALL' ? 'All Invoices' : mode}
+          </button>
+        ))}
+      </div>
+
       {/* Invoices Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         {loading ? (
           <Loading text="Loading sales invoices..." fullHeight />
-        ) : bills.length === 0 ? (
+        ) : filteredBills.length === 0 ? (
           <div className="py-20 text-center text-slate-400 text-sm">
             <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-            <p>No invoices found matching your query.</p>
+            <p className="font-bold text-slate-700 text-sm">No invoices found matching your query.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">Invoice No</th>
-                  <th className="py-3 px-4">Customer Name</th>
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Payment Mode</th>
-                  <th className="py-3 px-4">Total Amount (₹)</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3.5 px-4">Invoice No</th>
+                  <th className="py-3.5 px-4">Customer Name</th>
+                  <th className="py-3.5 px-4">Date &amp; Time</th>
+                  <th className="py-3.5 px-4">Payment Mode</th>
+                  <th className="py-3.5 px-4">Total Amount (₹)</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {bills.map((b) => (
-                  <tr key={b.invoice_no} className="hover:bg-slate-50/70 transition duration-150">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                      {b.invoice_no}
+                {filteredBills.map((b) => (
+                  <tr key={b.invoice_no} className="hover:bg-gold-50/40 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                      <button
+                        onClick={() => handleViewBill(b.invoice_no)}
+                        className="hover:text-gold-600 hover:underline text-left font-bold"
+                      >
+                        {b.invoice_no}
+                      </button>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-slate-800">
+                    <td className="py-3.5 px-4 font-semibold text-slate-800">
                       {b.customer_name}
                     </td>
-                    <td className="py-3 px-4 text-slate-500">{b.created_at}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                    <td className="py-3.5 px-4 text-slate-500 font-medium">{b.created_at}</td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px]">
                         {b.payment_mode}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-extrabold text-slate-900 text-sm">
+                    <td className="py-3.5 px-4 font-black text-slate-900 text-sm">
                       ₹{b.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3.5 px-4">
                       <Badge variant={b.status === 'PAID' ? 'success' : 'danger'} size="sm">
                         {b.status}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleViewBill(b.invoice_no)}
-                          className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
-                          title="View Bill Items"
+                          className="p-1.5 text-slate-400 hover:text-navy-900 hover:bg-gold-50 rounded-lg transition"
+                          title="View Breakdown Modal"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
 
                         <a
+                          href={`/bill/${b.invoice_no}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-slate-400 hover:text-navy-900 hover:bg-gold-50 rounded-lg transition"
+                          title="Print Receipt Template"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </a>
+
+                        <a
                           href={`/bill/${b.invoice_no}/pdf`}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                          title="Download PDF"
+                          className="p-1.5 text-slate-400 hover:text-gold-600 hover:bg-gold-50 rounded-lg transition"
+                          title="Download PDF Invoice"
                         >
                           <FileDown className="w-4 h-4" />
                         </a>
@@ -186,7 +236,7 @@ export const Bills = () => {
         )}
       </div>
 
-      {/* Bill Detail Modal */}
+      {/* Bill Detail Modal (Customer-facing invoice document uses logob.png) */}
       <Modal
         isOpen={!!selectedBill}
         onClose={() => setSelectedBill(null)}
@@ -195,17 +245,17 @@ export const Bills = () => {
       >
         {selectedBill && (
           <div className="space-y-4 text-xs">
-            {/* Store Branding Header */}
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <img src="/logo.png" alt="PANDAS" className="h-9 object-contain" />
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">PANDAS – NUTS &amp; CHOCOLATES</h3>
-                <p className="text-[10px] text-slate-500">Near Bus Stop, Kottappuram • +91-9847345005</p>
+            {/* Store Branding Header (Customer-facing document uses logob.png) */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between pb-3 border-b border-slate-100 gap-2">
+              <img src="/logob.png" alt="PANDAS" className="h-10 object-contain" />
+              <div className="sm:text-right text-[11px] text-slate-500">
+                <p className="font-semibold text-slate-700">Near Bus Stop, Kottappuram</p>
+                <p>+91-9847345005</p>
               </div>
             </div>
 
             {/* Header Summary */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 flex items-center justify-between">
               <div>
                 <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
                   Customer Information
@@ -223,10 +273,10 @@ export const Bills = () => {
                 <Badge variant={selectedBill.status === 'PAID' ? 'success' : 'danger'} size="md">
                   {selectedBill.status}
                 </Badge>
-                <div className="mt-2 font-black text-slate-900 text-lg">
+                <div className="mt-2 font-black text-slate-900 text-xl">
                   ₹{selectedBill.total.toFixed(2)}
                 </div>
-                <span className="text-[11px] text-slate-400">Payment: {selectedBill.payment_mode}</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Payment: {selectedBill.payment_mode}</span>
               </div>
             </div>
 
@@ -235,19 +285,19 @@ export const Bills = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="py-2 px-3">Product Name</th>
-                    <th className="py-2 px-3">Price</th>
-                    <th className="py-2 px-3">Quantity</th>
-                    <th className="py-2 px-3 text-right">Total</th>
+                    <th className="py-2.5 px-3">Product Name</th>
+                    <th className="py-2.5 px-3">Price</th>
+                    <th className="py-2.5 px-3">Quantity</th>
+                    <th className="py-2.5 px-3 text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {selectedBill.items?.map((it, idx) => (
-                    <tr key={idx}>
+                    <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="py-2.5 px-3 font-semibold text-slate-800">{it.product_name}</td>
                       <td className="py-2.5 px-3 text-slate-600">₹{it.price.toFixed(2)}</td>
                       <td className="py-2.5 px-3 font-bold text-slate-900">{it.quantity}</td>
-                      <td className="py-2.5 px-3 text-right font-extrabold text-slate-900">
+                      <td className="py-2.5 px-3 text-right font-black text-slate-900">
                         ₹{it.total.toFixed(2)}
                       </td>
                     </tr>
@@ -258,37 +308,36 @@ export const Bills = () => {
 
             {/* Actions */}
             <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
-              {selectedBill.status === 'PAID' ? (
-                <button
-                  onClick={() => handleCancelBill(selectedBill.invoice_no)}
-                  className="px-3 py-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl font-bold transition flex items-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Cancel Bill</span>
-                </button>
-              ) : (
-                <div />
-              )}
+              <div>
+                {selectedBill.status === 'PAID' && (
+                  <button
+                    onClick={() => handleCancelBill(selectedBill.invoice_no)}
+                    className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl font-bold transition text-xs"
+                  >
+                    Cancel Invoice
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 <a
                   href={`/bill/${selectedBill.invoice_no}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl font-bold transition"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl font-bold transition shadow-xs text-xs active:scale-95"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>View Printable</span>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Receipt</span>
                 </a>
 
                 <a
                   href={`/bill/${selectedBill.invoice_no}/pdf`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gold-500 hover:bg-gold-400 text-navy-900 rounded-xl font-bold transition shadow-xs text-xs active:scale-95"
                 >
-                  <FileDown className="w-4 h-4" />
-                  <span>PDF Document</span>
+                  <FileDown className="w-3.5 h-3.5" />
+                  <span>Download PDF</span>
                 </a>
               </div>
             </div>

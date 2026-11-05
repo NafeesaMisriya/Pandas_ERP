@@ -111,3 +111,59 @@ CREATE TABLE IF NOT EXISTS z_reports (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 9. CUSTOMERS MASTER TABLE
+CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    customer_code VARCHAR(50) UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    email VARCHAR(200),
+    address TEXT,
+    notes TEXT,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    registration_date DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. SUPPLIERS MASTER TABLE
+CREATE TABLE IF NOT EXISTS suppliers (
+    id SERIAL PRIMARY KEY,
+    supplier_code VARCHAR(50) UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    contact_person VARCHAR(200),
+    phone VARCHAR(50) NOT NULL,
+    email VARCHAR(200),
+    address TEXT,
+    gstin VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. EXPENSES TRACKING TABLE
+CREATE TABLE IF NOT EXISTS expenses (
+    id SERIAL PRIMARY KEY,
+    expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    category VARCHAR(100) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    payment_mode VARCHAR(50) NOT NULL DEFAULT 'Cash',
+    reference_no VARCHAR(100),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. EMPLOYEES DIRECTORY TABLE
+CREATE TABLE IF NOT EXISTS employees (
+    id SERIAL PRIMARY KEY,
+    employee_code VARCHAR(50) UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    role VARCHAR(100) NOT NULL DEFAULT 'Staff',
+    phone VARCHAR(50) NOT NULL,
+    email VARCHAR(200),
+    salary NUMERIC(10, 2) DEFAULT 0.00,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    joining_date DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+

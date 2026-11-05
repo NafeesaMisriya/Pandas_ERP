@@ -19,6 +19,7 @@ Designed specifically for FMCG, confectioneries, dry fruit & nut merchants, and 
 - [Database Architecture & ER Diagram](#-database-architecture--er-diagram)
 - [Directory Structure](#-directory-structure)
 - [Tech Stack](#-tech-stack)
+- [Enterprise Gold-Black-White Design System](#-enterprise-gold-black-white-design-system)
 - [Item Code Nomenclature](#-item-code-nomenclature)
 - [Installation & Setup Guide](#-installation--setup-guide)
   - [Prerequisites](#prerequisites)
@@ -266,6 +267,29 @@ pandass/
 - **Database Driver:** [psycopg2-binary](https://pypi.org/project/psycopg2-binary/)
 - **PDF Engine:** [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) (`pisa`)
 - **Templating:** Jinja2 (for automated PDF invoice compilation)
+
+---
+
+## 🎨 Enterprise Gold-Black-White Design System
+
+The application features a consistent, luxury enterprise theme designed for commercial retail ERP environments:
+
+### 1. Brand Assets & Placements
+- **Application Sidebar Branding:** Logo symbol `Psym.png` paired with clean `PANDAS` typography over a deep black (`bg-navy-900`) sidebar with gold navigation accents (`bg-gold-500 text-navy-900`).
+- **Dashboard Shop Banner:** Store banner displaying `logoo.png`, heading **Nuts & Chocolates**, subtitle, contact numbers, and fast action launchpads.
+- **Customer Documents & Receipts:** Thermal receipt printout and modal previews use `logob.png`.
+
+### 2. Color Palette & Semantic Tokens
+- **Brand Gold:** Primary actions, active navigation state, active tab pills, focused highlights (`#E5A910` / `#D9A020`).
+- **Deep Black / Charcoal (`navy-900`):** `#111318` / `#161922` used for the sidebar, top header, checkout console headers, and high-emphasis summaries.
+- **Warm White (`surface-warm`):** `#FBFBFA` workspace backdrop avoiding harsh sterile gray.
+- **Cards & Data Tables:** Crisp white backgrounds with subtle `slate-200/80` borders and rich gold hover elevation (`hover:border-gold-300`, `hover:bg-gold-50/40`).
+- **System Utilities:**
+  - `.erp-card` & `.erp-card-hover`: Uniform card structure with subtle gold hover shadows.
+  - `.erp-table-head` & `.erp-table-row`: Enterprise table header and row hover interaction.
+  - `.erp-btn-primary`: Gold primary CTA with dark typography.
+  - `.erp-btn-secondary`: Clean white button with subtle slate border and gold hover accent.
+  - `.erp-input`: Standardized focus ring with gold highlight.
 
 ---
 

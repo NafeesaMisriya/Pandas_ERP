@@ -8,20 +8,40 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          500: '#16a34a',
-          600: '#15803d',
-          700: '#166534',
+          50: '#FFFDF5',
+          100: '#FFF8E1',
+          200: '#FFEEB3',
+          300: '#FFE082',
+          400: '#F5C518',
+          500: '#F5B900',
+          600: '#D99A00',
+          700: '#B07D00',
         },
         navy: {
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617',
+          800: '#1A1A1A',
+          900: '#111111',
+          950: '#0A0A0A',
+        },
+        gold: {
+          50: '#FFFDF5',
+          100: '#FFF8E1',
+          200: '#FFEEB3',
+          300: '#FFE082',
+          400: '#F5C518',
+          500: '#F5B900',
+          600: '#D99A00',
+          700: '#B07D00',
+          border: '#E9D9AD',
+        },
+        surface: {
+          warm: '#FAF9F5',
+          white: '#FFFFFF',
         }
-      }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
     },
   },
   plugins: [],
 }
-

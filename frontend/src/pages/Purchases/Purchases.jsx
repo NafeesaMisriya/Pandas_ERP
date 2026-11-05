@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Save, Truck, History, Calendar, DollarSign, CheckCircle2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  Plus,
+  Trash2,
+  Save,
+  Truck,
+  History,
+  Calendar,
+  DollarSign,
+  CheckCircle2,
+  Package,
+  Layers,
+  Clock,
+  ShieldCheck,
+  CreditCard,
+  Building
+} from 'lucide-react';
 import { purchasesApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Loading } from '../../components/common/Loading';
+import { Badge } from '../../components/common/Badge';
+import { isIntegerUnit, validateUnitQuantity, formatQuantity } from '../../utils/unitValidation';
 
 export const Purchases = () => {
   const navigate = useNavigate();
@@ -12,10 +29,17 @@ export const Purchases = () => {
   const [categories, setCategories] = useState([]);
   const [supplierName, setSupplierName] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [billStatus, setBillStatus] = useState('Received');
+
+  // Concept A: Goods Receipt Status ('Pending Receipt' | 'Received' | 'Verified' | 'Partially Received')
+  const [receiptStatus, setReceiptStatus] = useState('Received');
+
+  // Concept B & C: Payment Method & Payment Status / Amount
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [isPaidInFull, setIsPaidInFull] = useState(true);
+  const [paidAmount, setPaidAmount] = useState('');
 
   const [items, setItems] = useState([
-    { category: '', item_code: '', quantity: 1, cost_price: 0, total: 0, availableProducts: [] },
+    { category: '', item_code: '', unit: '', quantity: 1, cost_price: 0, total: 0, availableProducts: [] },
   ]);
 
   const [submitting, setSubmitting] = useState(false);
@@ -92,6 +116,21 @@ export const Purchases = () => {
   };
 
   const grandTotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+  const totalUnits = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+  // Concept B: Effective Paid Amount & Dynamic Payment Status
+  const effectivePaidAmount = isPaidInFull ? grandTotal : (parseFloat(paidAmount) || 0);
+
+  let calculatedPaymentStatus = 'Unpaid';
+  if (effectivePaidAmount >= grandTotal && grandTotal > 0) {
+    calculatedPaymentStatus = 'Paid';
+  } else if (effectivePaidAmount > 0) {
+    calculatedPaymentStatus = 'Partially Paid';
+  } else {
+    calculatedPaymentStatus = 'Unpaid';
+  }
+
+  const balanceDue = Math.max(0, grandTotal - effectivePaidAmount);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -110,9 +149,12 @@ export const Purchases = () => {
     try {
       setSubmitting(true);
       await purchasesApi.save({
-        supplier_name: supplierName,
+        supplier_name: supplierName.trim(),
         purchase_date: purchaseDate,
-        bill_status: billStatus,
+        receipt_status: receiptStatus,
+        payment_method: paymentMethod,
+        paid_amount: effectivePaidAmount,
+        payment_status: calculatedPaymentStatus,
         grand_total: grandTotal,
         items: validItems.map((i) => ({
           item_code: i.item_code,
@@ -122,7 +164,11 @@ export const Purchases = () => {
         })),
       });
 
-      toast.success('Purchase recorded! Inventory stock has been automatically updated.');
+      if (receiptStatus === 'Pending Receipt') {
+        toast.success('Purchase recorded! Consignment marked as Pending Receipt (inventory will update upon arrival).');
+      } else {
+        toast.success('Purchase recorded! Inventory stock has been replenished in PostgreSQL.');
+      }
       navigate('/purchases/history');
     } catch (err) {
       console.error(err);
@@ -133,106 +179,154 @@ export const Purchases = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header & Navigation */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
-            <Truck className="w-5 h-5" />
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Context Breadcrumb & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <span>Procurement</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[#F5B900] font-bold">Purchase Entry</span>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Supplier Inward Purchase Entry</h2>
-            <p className="text-xs text-slate-500">Record incoming stock and automatically increment product counts</p>
-          </div>
+          <p className="text-xs text-slate-500 mt-1">Record received vendor consignments and automatically replenish inventory</p>
         </div>
 
-        <button
-          onClick={() => navigate('/purchases/history')}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+        <Link
+          to="/purchases/history"
+          className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white hover:bg-gold-50/60 hover:border-gold-300 border border-slate-200/90 rounded-xl shadow-xs transition active:scale-95"
         >
           <History className="w-4 h-4 text-slate-600" />
           <span>View Purchase History</span>
-        </button>
+        </Link>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 text-xs">
-        {/* Supplier & Date Details */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-slate-600 font-bold mb-1.5">Supplier / Vendor Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. Metro Cash & Carry, Royal Dry Fruits Ltd"
-              value={supplierName}
-              onChange={(e) => setSupplierName(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            />
+        {/* Section 1: Supplier & Consignment Details */}
+        <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <span className="w-5 h-5 rounded-full bg-[#F5B900] text-[#111111] text-[11px] font-black flex items-center justify-center">
+              1
+            </span>
+            <h3 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">
+              Supplier &amp; Shipment Metadata
+            </h3>
           </div>
 
-          <div>
-            <label className="block text-slate-600 font-bold mb-1.5">Purchase Invoice Date *</label>
-            <div className="relative">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">Supplier / Vendor Name *</label>
+              <input
+                type="text"
+                placeholder="e.g. Metro Cash & Carry, Royal Dry Fruits Ltd"
+                value={supplierName}
+                onChange={(e) => setSupplierName(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">Invoice / Receipt Date *</label>
               <input
                 type="date"
                 value={purchaseDate}
                 onChange={(e) => setPurchaseDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500 shadow-xs"
               />
+            </div>
+
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">Goods Receipt Status *</label>
+              <select
+                value={receiptStatus}
+                onChange={(e) => setReceiptStatus(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              >
+                <option value="Received">Received (Goods Arrived)</option>
+                <option value="Verified">Verified (Checked &amp; Accepted)</option>
+                <option value="Pending Receipt">Pending Receipt (Awaiting Delivery)</option>
+                <option value="Partially Received">Partially Received</option>
+              </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-slate-600 font-bold mb-1.5">Consignment Status</label>
-            <select
-              value={billStatus}
-              onChange={(e) => setBillStatus(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            >
-              <option value="Received">Received / Verified</option>
-              <option value="Paid">Fully Paid</option>
-              <option value="Pending">Payment Pending</option>
-            </select>
+          {/* Contextual Goods Receipt Status Note */}
+          <div className="pt-2">
+            {receiptStatus === 'Pending Receipt' ? (
+              <div className="flex items-center gap-2 p-3 bg-amber-50/80 border border-amber-200/90 rounded-xl text-amber-900 text-xs">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong>Pending Receipt:</strong> Inventory stock will <u>not</u> increase until goods physically arrive and are marked as received in Purchase History.
+                </span>
+              </div>
+            ) : receiptStatus === 'Verified' ? (
+              <div className="flex items-center gap-2 p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-xl text-emerald-900 text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  <strong>Verified:</strong> Goods are confirmed and accepted against purchase invoice. Available catalog inventory will be immediately updated.
+                </span>
+              </div>
+            ) : receiptStatus === 'Partially Received' ? (
+              <div className="flex items-center gap-2 p-3 bg-purple-50/80 border border-purple-200/90 rounded-xl text-purple-900 text-xs">
+                <Package className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>
+                  <strong>Partially Received:</strong> Entered quantities will be added to active inventory balances.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-700 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-[#F5B900] shrink-0" />
+                <span>
+                  <strong>Received:</strong> Goods physically received at store. Stock balances in PostgreSQL catalog will be automatically replenished upon saving.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Purchase Items Line Table */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-            <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
-              Purchased Line Items
-            </h3>
+        {/* Section 2: Purchased Line Items */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-navy-900 text-gold-400 text-[11px] font-bold flex items-center justify-center">
+                2
+              </span>
+              <h3 className="font-bold text-navy-900 uppercase tracking-wider text-[11px]">
+                Inward Product Items ({items.length} line{items.length === 1 ? '' : 's'})
+              </h3>
+            </div>
+
             <button
               type="button"
               onClick={addRow}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-500 shadow-sm transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gold-500 text-navy-900 rounded-xl text-xs font-bold hover:bg-gold-400 shadow-sm transition active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Line Item</span>
             </button>
           </div>
 
-          <div className="p-4 overflow-x-auto">
+          <div className="p-4 md:p-5 overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="py-2 px-3 w-1/4">Department</th>
-                  <th className="py-2 px-3 w-1/3">Item / Product</th>
-                  <th className="py-2 px-3 w-24">Quantity</th>
-                  <th className="py-2 px-3 w-28">Cost Price (₹)</th>
-                  <th className="py-2 px-3 w-28 text-right">Line Total (₹)</th>
-                  <th className="py-2 px-3 w-12 text-center"></th>
+                <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-3 w-1/4">Department</th>
+                  <th className="py-3 px-3 w-1/3">Item / Product</th>
+                  <th className="py-3 px-3 w-28">Quantity</th>
+                  <th className="py-3 px-3 w-32">Cost Price (₹)</th>
+                  <th className="py-3 px-3 w-32 text-right">Line Total (₹)</th>
+                  <th className="py-3 px-3 w-12 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((row, index) => (
-                  <tr key={index} className="hover:bg-slate-50/50">
-                    <td className="py-2 px-3">
+                  <tr key={index} className="hover:bg-gold-50/40 transition-colors">
+                    <td className="py-3 px-3">
                       <select
                         value={row.category}
                         onChange={(e) => handleCategoryChange(index, e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500"
                       >
                         <option value="">Select Category</option>
                         {categories.map((c) => (
@@ -243,12 +337,12 @@ export const Purchases = () => {
                       </select>
                     </td>
 
-                    <td className="py-2 px-3">
+                    <td className="py-3 px-3">
                       <select
                         value={row.item_code}
                         onChange={(e) => handleProductChange(index, e.target.value)}
                         disabled={!row.category}
-                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white disabled:bg-slate-100 disabled:text-slate-400 font-medium"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500"
                       >
                         <option value="">Select Product</option>
                         {row.availableProducts.map((p) => (
@@ -259,38 +353,39 @@ export const Purchases = () => {
                       </select>
                     </td>
 
-                    <td className="py-2 px-3">
+                    <td className="py-3 px-3">
                       <input
                         type="number"
                         step="0.01"
                         min="0.01"
                         value={row.quantity}
                         onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-800"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500"
                       />
                     </td>
 
-                    <td className="py-2 px-3">
+                    <td className="py-3 px-3">
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         value={row.cost_price}
                         onChange={(e) => handleCostChange(index, parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-800"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-gold-500/20 focus:border-gold-500"
                       />
                     </td>
 
-                    <td className="py-2 px-3 text-right font-extrabold text-slate-900 text-sm">
+                    <td className="py-3 px-3 text-right font-black text-navy-900 text-sm">
                       ₹{row.total.toFixed(2)}
                     </td>
 
-                    <td className="py-2 px-3 text-center">
+                    <td className="py-3 px-3 text-center">
                       <button
                         type="button"
                         onClick={() => removeRow(index)}
                         disabled={items.length === 1}
-                        className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 disabled:hover:text-slate-400 transition"
+                        className="p-1.5 text-slate-300 hover:text-rose-600 disabled:opacity-20 disabled:hover:text-slate-300 transition"
+                        title="Remove Line Item"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -300,21 +395,136 @@ export const Purchases = () => {
               </tbody>
             </table>
           </div>
+        </div>
 
-          {/* Grand Total & Actions Footer */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-slate-500 font-semibold text-xs">Total Shipment Cost:</span>
-              <span className="text-2xl font-black text-slate-900">
-                ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        {/* Section 3: Payment Method & Financial Settlement */}
+        <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-[#111111] text-[#F5B900] text-[11px] font-black flex items-center justify-center">
+                3
               </span>
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">
+                Payment Method &amp; Financial Settlement
+              </h3>
+            </div>
+
+            {/* Live Calculated Payment Status Badge */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Computed Payment Status:</span>
+              {calculatedPaymentStatus === 'Paid' ? (
+                <span className="px-3 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-300">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Paid in Full
+                </span>
+              ) : calculatedPaymentStatus === 'Partially Paid' ? (
+                <span className="px-3 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 flex items-center gap-1 border border-amber-300">
+                  <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                  Partially Paid (₹{effectivePaidAmount.toFixed(2)})
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 flex items-center gap-1 border border-rose-300">
+                  <Clock className="w-3.5 h-3.5 text-rose-600" />
+                  Unpaid (Full ₹{grandTotal.toFixed(2)} Outstanding)
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1">
+            {/* Payment Method */}
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">Payment Method *</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900] shadow-xs"
+              >
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI / GPay / PhonePe</option>
+                <option value="Card">Credit / Debit Card</option>
+                <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {/* Settlement Terms */}
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">Settlement Terms</label>
+              <div className="flex items-center h-[42px]">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-800 font-bold text-xs select-none">
+                  <input
+                    type="checkbox"
+                    checked={isPaidInFull}
+                    onChange={(e) => {
+                      setIsPaidInFull(e.target.checked);
+                      if (e.target.checked) setPaidAmount('');
+                    }}
+                    className="w-4 h-4 rounded text-[#F5B900] focus:ring-[#F5B900]"
+                  />
+                  <span>Paid in Full (₹{grandTotal.toFixed(2)})</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Custom / Partial Paid Amount */}
+            <div>
+              <label className="block text-slate-600 font-bold mb-1.5">
+                Amount Paid Recorded (₹)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                disabled={isPaidInFull}
+                placeholder={isPaidInFull ? `₹${grandTotal.toFixed(2)} (Full)` : 'Enter amount paid'}
+                value={isPaidInFull ? grandTotal : paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-black text-slate-800 focus:outline-none shadow-xs transition ${
+                  isPaidInFull
+                    ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
+                    : 'bg-white border-slate-300 focus:ring-2 focus:ring-[#F5B900]/20 focus:border-[#F5B900]'
+                }`}
+              />
+              {!isPaidInFull && balanceDue > 0 && (
+                <span className="text-[11px] font-bold text-amber-700 block mt-1">
+                  Remaining balance due to vendor: ₹{balanceDue.toFixed(2)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Summary & Order Finalization */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="p-5 bg-slate-50/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Total Items
+                </span>
+                <span className="text-base font-black text-slate-800">
+                  {items.filter(i => i.item_code).length} SKUs ({totalUnits} units)
+                </span>
+              </div>
+
+              <div className="h-8 w-px bg-slate-200" />
+
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Total Consignment Cost
+                </span>
+                <span className="text-2xl font-black text-gold-600">
+                  ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => navigate('/purchases/history')}
-                className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-200 font-bold transition"
+                className="px-5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-200 font-bold transition text-xs"
               >
                 Cancel
               </button>
@@ -322,7 +532,7 @@ export const Purchases = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-700/20 transition disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2.5 bg-gold-500 hover:bg-gold-400 text-navy-900 rounded-xl font-black text-xs shadow-md shadow-gold-500/20 transition disabled:opacity-50 active:scale-95"
               >
                 <Save className="w-4 h-4" />
                 <span>{submitting ? 'Recording Inward...' : 'Confirm & Save Purchase'}</span>

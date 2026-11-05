@@ -9,10 +9,14 @@ import {
   FileText,
   BarChart3,
   CalendarCheck,
-  ChevronLeft,
-  ChevronRight,
-  Store
+  Receipt,
+  BookOpen,
+  Users,
+  Building2,
+  UserCheck,
+  ChevronLeft
 } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -23,58 +27,103 @@ const navItems = [
   { name: 'Invoices & Bills', path: '/bills', icon: FileText },
   { name: 'Sales Reports', path: '/reports', icon: BarChart3 },
   { name: 'Daily Z-Report', path: '/z-report', icon: CalendarCheck },
+  { name: 'Expenses', path: '/expenses', icon: Receipt, placeholder: true },
+  { name: 'Accounting', path: '/accounting', icon: BookOpen, placeholder: true },
+  { name: 'Customers', path: '/customers', icon: Users, placeholder: true },
+  { name: 'Suppliers', path: '/suppliers', icon: Building2, placeholder: true },
+  { name: 'Users & Employees', path: '/users', icon: UserCheck, placeholder: true },
 ];
 
 export const Sidebar = ({ collapsed, setCollapsed }) => {
+  const toast = useToast();
+
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen z-40 bg-navy-900 text-slate-300 transition-all duration-300 flex flex-col border-r border-navy-800 shadow-xl ${
+      className={`fixed top-0 left-0 h-screen z-40 bg-[#111111] text-white transition-all duration-300 flex flex-col border-r border-white/10 ${
         collapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-navy-800 bg-navy-950">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="bg-white rounded-xl p-1 flex items-center justify-center shrink-0 shadow-md h-10 w-10 overflow-hidden">
-            <img src="/logo.png" alt="PANDAS Logo" className="h-full w-full object-contain" />
-          </div>
-          {!collapsed && (
-            <div className="leading-tight">
-              <span className="font-extrabold text-white text-base tracking-wider block">PANDAS</span>
-              <span className="block text-[10px] text-emerald-400 font-bold tracking-wider uppercase">
-                Nuts &amp; Chocolates
+      {/* Brand Header: Psym.png + PANDAS */}
+      <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 bg-[#111111]">
+        {collapsed ? (
+          <button
+            onClick={() => setCollapsed(false)}
+            className="mx-auto flex items-center justify-center h-10 w-10 rounded-xl overflow-hidden hover:ring-2 hover:ring-[#F5B900]/50 transition"
+            title="PANDAS – Click to expand"
+          >
+            <img
+              src="/Psym.png"
+              alt="P"
+              className="h-9 w-9 object-contain"
+            />
+          </button>
+        ) : (
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <img
+                src="/Psym.png"
+                alt="P"
+                className="h-9 w-9 object-contain shrink-0"
+              />
+              <span className="text-xl font-black tracking-wider text-white font-serif">
+                PANDAS
               </span>
             </div>
-          )}
-        </div>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-navy-800 transition"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-        </button>
+            <button
+              onClick={() => setCollapsed(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition shrink-0"
+              title="Collapse sidebar"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Nav List */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5">
+      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1 scrollbar-none">
         {navItems.map((item) => {
           const Icon = item.icon;
+
+          if (item.placeholder) {
+            return (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => toast.info(`${item.name} module is scheduled for the upcoming release.`)}
+                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl font-medium text-sm text-white/90 hover:bg-white/10 hover:text-white transition-all duration-200 group text-left"
+                title={collapsed ? item.name : undefined}
+              >
+                <Icon className="w-[18px] h-[18px] shrink-0 text-white/80 group-hover:text-white" />
+                {!collapsed && <span className="truncate">{item.name}</span>}
+              </button>
+            );
+          }
+
           return (
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3.5 px-3.5 py-3 rounded-xl font-medium text-sm transition-all duration-200 group ${
+                `flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/40'
-                    : 'text-slate-300 hover:bg-navy-800/80 hover:text-white'
+                    ? 'bg-[#F5B900] text-[#111111] font-black shadow-sm'
+                    : 'text-white/90 hover:bg-white/10 hover:text-white'
                 }`
               }
               title={collapsed ? item.name : undefined}
             >
-              <Icon className="w-5 h-5 shrink-0 transition group-hover:scale-105" />
-              {!collapsed && <span className="truncate">{item.name}</span>}
+              {({ isActive }) => (
+                <>
+                  <Icon
+                    className={`w-[18px] h-[18px] shrink-0 ${
+                      isActive ? 'text-[#111111]' : 'text-white/80 group-hover:text-white'
+                    }`}
+                  />
+                  {!collapsed && <span className="truncate">{item.name}</span>}
+                </>
+              )}
             </NavLink>
           );
         })}
@@ -82,12 +131,12 @@ export const Sidebar = ({ collapsed, setCollapsed }) => {
 
       {/* Footer Info */}
       {!collapsed && (
-        <div className="p-4 border-t border-navy-800 bg-navy-950/60 text-xs text-slate-400">
+        <div className="p-4 border-t border-white/10 text-xs text-slate-400 bg-[#111111]">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-medium text-slate-300">POS Online</span>
+            <span className="font-semibold text-white">POS Online</span>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">v2.0 • PostgreSQL Connected</div>
+          <div className="mt-1 text-[11px] text-slate-400">PostgreSQL Connected</div>
         </div>
       )}
     </aside>
