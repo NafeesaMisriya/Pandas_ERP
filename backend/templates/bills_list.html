@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bills List</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="navbar">
+    <a href="/">🏠 Dashboard</a>
+</div>
+
+<img src="/static/images/logo.png" class="logo">
+
+<header class="topbar">
+    <h2>Bills List</h2>
+</header>
+
+<form method="POST" style="margin:20px;">
+    <input type="text" name="search" placeholder="Search Invoice or Customer">
+    <button type="submit">Search</button>
+</form>
+
+<table border="1" width="95%" style="margin:20px;">
+<tr>
+    <th>Invoice</th>
+    <th>Customer</th>
+    <th>Total</th>
+    <th>Date</th>
+    <th>Status</th>
+    <th>Action</th>
+    <th>View</th>
+    <th>PDF</th>
+</tr>
+
+{% for b in bills %}
+<tr>
+    <td>{{ b[0] }}</td>
+    <td>{{ b[1] }}</td>
+    <td>₹{{ b[2] }}</td>
+    <td>{{ b[3].strftime("%d-%m-%Y %H:%M:%S") }}</td>
+    <td>{{ b[4] }}</td>
+    <td>
+    {% if b[4] == 'PAID' %}
+        <a href="/cancel-bill/{{ b[0] }}">Cancel</a>
+    {% else %}
+        -
+    {% endif %}
+    </td>
+
+    <td>
+        <a href="/bill/{{ b[0] }}">View</a>
+    </td>
+    <td>
+        <a href="/{{ b[5] }}" target="_blank">Open PDF</a>
+    </td>
+</tr>
+{% endfor %}
+
+</table>
+
+</body>
+</html>

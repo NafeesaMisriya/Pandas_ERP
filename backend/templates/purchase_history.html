@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PANDAS – Purchase History</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="sec-bg">
+
+<div class="navbar">
+    <a href="/">🏠 Dashboard</a>
+</div>
+
+<img src="/static/images/logo.png" class="logo">
+
+<header class="topbar">
+    <h2>Purchase History</h2>
+</header>
+
+<div class="filter-box">
+
+<form method="GET" class="filter-form">
+
+    <div class="filter-field">
+        <label>Supplier</label>
+        <select name="supplier" onchange="this.form.submit()" required>
+            <option value="">Select Supplier</option>
+            {% for s in suppliers %}
+            <option value="{{ s }}"
+            {% if selected_supplier==s %}selected{% endif %}>
+                {{ s }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% if dates %}
+    <div class="filter-field">
+        <label>Purchase Date</label>
+        <select name="purchase_date" onchange="this.form.submit()" required>
+            <option value="">Select Date</option>
+            {% for d in dates %}
+            <option value="{{ d }}"
+            {% if selected_date==d %}selected{% endif %}>
+                {{ d }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+
+</form>
+
+</div>
+
+{% if purchase %}
+
+<hr>
+
+<br>
+<div class="history-card">
+
+    <div class="history-header">
+        <div>
+            <strong>Date:</strong> {{ selected_date }}
+        </div>
+        <div>
+            <strong>Status:</strong> {{ bill_status }}
+        </div>
+    </div>
+
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th style="width:40%;">Item</th>
+                <th style="width:20%; text-align:right;">Cost</th>
+                <th style="width:20%; text-align:right;">Qty</th>
+                <th style="width:20%; text-align:right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in items %}
+            <tr>
+                <td>{{ i[0] }}</td>
+                <td style="text-align:right; ">₹{{ "%.2f"|format(i[1]) }}</td>
+                <td style="text-align:right;">{{ i[2] }}</td>
+                <td style="text-align:right;">₹{{ "%.2f"|format(i[3]) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+<br>
+
+<h3 style="text-align:right;">
+    Total: ₹{{ purchase[1] }}
+</h3>
+
+{% endif %}
+
+</div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PANDAS – Product Management</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="sec-bg">
+
+<div class="navbar">
+    <a href="/">🏠 Dashboard</a>
+</div>
+<img src="/static/images/logo.png" class="logo">
+<header class="topbar">
+    <h2>Product Management</h2>
+</header>
+
+<!-- ADD PRODUCT -->
+
+<!-- PRODUCT SEARCH -->
+<form method="GET" action="{{ url_for('product_form') }}">
+    <label>
+        Product Name
+    </label><br>
+
+    <input type="text"
+           name="product_name"
+           list="product_suggestions"
+           placeholder="Type product name..."
+           required
+           style="padding:6px;width:250px">
+
+    <datalist id="product_suggestions">
+        {% for item in items %}
+            <option value="{{ item[1] }} – ₹{{ item[3] }}">
+        {% endfor %}
+    </datalist>
+
+    <button type="submit">Go</button>
+</form>
+
+<hr>
+
+
+<table border="1" width="100%">
+<tr>
+<th>Code</th><th>Name</th><th>Category</th>
+<th>Price</th><th>Stock</th><th>Unit</th><th>Actions</th>
+</tr>
+
+{% for p in items %}
+<tr>
+<td>{{ p[0] }}</td>
+<td>{{ p[1] }}</td>
+<td>{{ p[2] }}</td>
+
+<form action="/update-product/{{ p[0] }}" method="POST">
+<td><input name="price" value="{{ p[3] }}" style="width:80px;"></td>
+<td><input name="stock" value="{{ p[4] }}" style="width:80px;"></td>
+<td>{{ p[5] }}</td>
+<td>
+<button>💾 Save</button>
+<a href="/delete-product/{{ p[0] }}" style="color:red;">❌</a>
+</td>
+</form>
+
+</tr>
+{% endfor %}
+</table>
+
+</body>
+</html>

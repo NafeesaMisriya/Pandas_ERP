@@ -1,0 +1,33 @@
+<h2>Verify Bill</h2>
+
+<form method="post">
+    <label>Customer Name</label>
+    <input type="text" name="customer_name">
+
+    <label>Phone</label>
+    <input type="text" name="customer_phone">
+
+    <label>Payment Mode</label>
+    <select name="payment_mode">
+        <option>Cash</option>
+        <option>UPI</option>
+        <option>Card</option>
+    </select>
+
+    <hr>
+
+    <table width="100%" border="1">
+        <tr><th>Item</th><th>Qty</th><th>Total</th></tr>
+        {% for i in cart %}
+        <tr>
+            <td>{{ i.name }}</td>
+            <td>{{ i.qty }}</td>
+            <td>₹{{ i.total }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h3>Total: ₹{{ bill_total }}</h3>
+
+    <button type="submit">Confirm & Save</button>
+</form>

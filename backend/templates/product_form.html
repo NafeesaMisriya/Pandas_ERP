@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Product – Form</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #f5f5f5;
+}
+
+.header {
+    background: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    padding: 10px 20px;
+}
+
+.header h1 {
+    font-size: 22px;
+    margin: 0;
+}
+
+.badges {
+    float: right;
+    display: flex;
+    gap: 15px;
+    font-size: 13px;
+    color: #555;
+}
+
+.card {
+    background: #fff;
+    margin: 15px;
+    padding: 20px;
+    border: 1px solid #ddd;
+}
+
+.product-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.product-title h2 {
+    font-size: 26px;
+    margin: 0;
+}
+
+.flags {
+    margin-top: 10px;
+}
+
+.flags label {
+    margin-right: 20px;
+    font-size: 14px;
+}
+
+.tabs {
+    margin-top: 20px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+}
+
+.tab {
+    padding: 10px 18px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.tab.active {
+    border-bottom: 3px solid #875A7B;
+    font-weight: 600;
+}
+
+.section {
+    margin-top: 25px;
+}
+
+.section h3 {
+    margin-bottom: 10px;
+    color: #444;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.field label {
+    width: 200px;
+    font-size: 13px;
+}
+
+.field input,
+.field select,
+.field textarea {
+    width: 260px;
+    padding: 6px;
+}
+
+textarea {
+    height: 70px;
+}
+
+.bottom-bar {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.primary {
+    background: #875A7B;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+}
+
+.secondary {
+    background: #eee;
+    padding: 8px 16px;
+    text-decoration: none;
+    color: black;
+}
+
+.error {
+    color: red;
+    font-size: 12px;
+    margin-left: 180px;
+}
+
+.input-error {
+    border: 1px solid red;
+    background: #fff5f5;
+}
+/* IMAGE UPLOAD */
+.image-upload {
+    width: 260px;
+    height: 160px;
+    border: 2px dashed #bbb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: #fafafa;
+    text-align: center;
+    color: #777;
+}
+.category-radios {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: nowrap;
+}
+
+
+.category-radios label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.category-radios input[type="radio"] {
+    width: auto;
+    accent-color: #875A7B;
+    cursor: pointer;
+}
+.category-row {
+    display: flex;
+    justify-content: space-between; /* auto-adjust spacing */
+    align-items: center;
+    width: 100%;
+    flex-wrap: nowrap;              /* never wrap */
+}
+
+.category-row label {
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;                       /* small gap between radio + text */
+}
+
+.image-upload img {
+    max-width: 100%;
+    max-height: 100%;
+    display: none;
+}
+
+.image-upload span {
+    font-size: 13px;
+}
+
+/* CLASSIC ERROR BOX */
+.error {
+    background: #fff0f0;
+    border: 1px solid #ffb3b3;
+    color: #a30000;
+    padding: 6px 8px;
+    font-size: 12px;
+    margin-left: 200px;
+    margin-top: 4px;
+    border-radius: 4px;
+}
+.tab.disabled {
+    color: #aaa;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+</style>
+</head>
+
+<body>
+
+<form method="POST" action="/products/update" enctype="multipart/form-data">
+
+<!-- HEADER -->
+<div class="header">
+    <h1></h1>
+    <div class="badges">
+        <span>Pricelists: 0</span>
+        <span>Documents: 0</span>
+        <span>Sold: 0.0000 PCS</span>
+        <span>Purchased: 0.0000 PCS</span>
+    </div>
+</div>
+
+<div class="card">
+
+<!-- TITLE -->
+<div class="product-title">
+    <h2>{{ product_name }}</h2>
+</div>
+
+<!-- FLAGS -->
+<div class="flags">
+    <label>
+        <input type="checkbox" name="is_sale"
+        {% if product and product[14] %}checked{% endif %}>
+        Sales
+    </label>
+
+    <label>
+        <input type="checkbox" name="is_purchase"
+        {% if product and product[15] %}checked{% endif %}>
+        Purchase
+    </label>
+
+    <label>
+        <input type="checkbox" name="is_manufactured"
+        {% if product and product[16] %}checked{% endif %}>
+        Manufactured
+    </label>
+</div>
+
+
+<!-- TABS -->
+<div class="tabs">
+    <div class="tab active" data-tab="general" onclick="showTab('general', this)">General Information</div>
+    <div class="tab" data-tab="sales" onclick="showTab('sales', this)">Sales</div>
+    <div class="tab" data-tab="purchase" onclick="showTab('purchase', this)">Purchase</div>
+    <div class="tab" data-tab="accounting" onclick="showTab('accounting', this)">Accounting</div>
+</div>
+
+
+<!-- ================= GENERAL INFORMATION ================= -->
+<div class="section tab-content" id="general">
+
+     <div class="field">
+         <label>Category <span style="color:red">*</span></label>
+                <div class="category-radios">
+                    {% for cat in category %}
+                    <label>
+                        <input type="radio"
+                               name="category"
+                               value="{{ cat }}"
+                               data-required="true"
+                               {% if product and product[2] == cat %}checked{% endif %}>
+                        {{ cat }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+    <div class="form-grid">
+        <div>
+
+            <div class="field">
+                <label>
+                    Product Name <span style="color:red">*</span>
+                </label>
+                <input type="text"
+                       id="item_name"
+                       name="item_name"
+                       data-required="true"
+                       data-section="general"
+                       value="{{ form.item_name if form else (product[1] if product and product[1] else '') }}">
+
+
+                </div>
+
+            <div class="field">
+                <label>Unit</label>
+                <input type="text"
+                   name="unit"
+                   data-section="general"
+                   value="{{form.unit if form else (product[3] if product and product[3] else '') }}">
+            </div>
+            <div class="field">
+                <label>Stock </label>
+                <input type="text"
+                       name="stock"
+                       value="{{ form.stock if form else (product[13] if product and product[13] is not none else '') }}">
+            </div>
+        </div>
+
+        <div>
+            <div class="field">
+                <label></label>
+                <input type="hidden" name="item_code" data-section="general" value="{{ product[0] if product else '' }}">
+            </div>
+
+            <div class="field">
+                <label>Company<span style="color:red">*</span></label>
+                <input type="text" name="company" data-section="general"  data-required="true"
+                value="{{ form.company if form else (product[17] if product and product[17] else '')}}">
+            </div>
+            <div class="field">
+                <label>Product Image</label>
+                <div class="image-upload" onclick="document.getElementById('product_image').click()">
+                    <input type="file"
+                       id="product_image"
+                       name="product_image"
+                       accept="image/*"
+                       style="display:none">
+                   <img id="imagePreview"
+                         {% if product and product[0] %}
+                             src="/product-image/{{ product[0] }}"
+                             style="display:block"
+                         {% else %}
+                             style="display:none"
+                         {% endif %}>
+                    <span id="imageText"
+                          {% if product and product[0] %}{% endif %}>
+                          Click to upload image
+                    </span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ================= SALES ================= -->
+<div class="section tab-content" id="sales" style="display:none;">
+    <h3>Sales</h3>
+
+    <div class="form-grid">
+        <div>
+            <div class="field">
+                <label>
+                    Sales Price <span style="color:red">*</span>
+                </label>
+                <input type="text"
+                       name="sale_price"
+                       data-section="sales"
+                       data-type="number"
+                        data-required="true"
+                       value="{{ form.price if form else (product[4] if product and product[4] else '')}}"
+                       class="{{ 'input-error' if errors and errors.get('sale_price') }}">
+
+            </div>
+
+            <div class="field">
+                <label>Sales Tax (%)</label>
+                <input type="number" step="0.01" name="sales_tax"
+                       value="{{form.sales_tax if form else (product[6] if product and product[6] else '' )}}">
+
+            </div>
+        </div>
+
+        <div>
+            <div class="field">
+                <label>Invoicing Policy</label>
+                <select name="invoicing_policy">
+                    {% set inv = product[7] if product else '' %}
+                    <option value="Ordered quantities" {{'selected' if inv=='Ordered quantities' else '' }}>
+                        Ordered quantities
+                    </option>
+                    <option value="Delivered quantities" {{'selected' if inv=='Delivered quantities' else '' }}>
+                        Delivered quantities
+                    </option>
+                </select>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= PURCHASE ================= -->
+<div class="section tab-content" id="purchase" style="display:none;">
+    <h3>Purchase</h3>
+
+    <div class="form-grid">
+        <div>
+            <div class="field">
+                <label>
+                    Cost Price <span style="color:red">*</span>
+                </label>
+                <input type="text"
+                       name="cost_price"
+                       data-section="purchase"
+                       data-type="number"
+                       data-required="true"
+                       value="{{form.cost_price if form else (product[5] if product and product[5] else '') }}"
+                       class="{{ 'input-error' if errors and errors.get('cost_price') }}" >
+
+            </div>
+
+
+            <div class="field">
+                <label>Purchase Tax (%)</label>
+                <input type="number" step="0.01" name="purchase_tax"
+                       value="{{ '' if not product or not product[8] else product[8] }}">
+
+            </div>
+        </div>
+
+        <div>
+            <div class="field">
+                <label>Purchase Unit</label>
+                <input type="text" name="purchase_unit" value="{{ form.unit if form else (product[9] if product and product[9] else '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= ACCOUNTING ================= -->
+<div class="section tab-content" id="accounting" style="display:none;">
+    <h3>Accounting</h3>
+
+    <div class="form-grid">
+        <div>
+            <div class="field">
+                <label>Income Account</label>
+                <input type="text" name="income_account"   value="{{form.unit if form else (product[10] if product and product[10] else '') }}">
+            </div>
+        </div>
+
+        <div>
+            <div class="field">
+                <label>Expense Account</label>
+                <input type="text" name="expense_account"  value="{{ form.unit if form else (product[11] if product and product[11] else '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NOTES -->
+<div class="section">
+    <div class="field">
+        <label>Description</label>
+        <textarea name="description">{{ '' if not product or not product[12] else product[12] }}</textarea>
+    </div>
+</div>
+
+<!-- ACTIONS -->
+<div class="bottom-bar">
+    <button type="submit" class="primary">Save</button>
+    <a href="/products" class="secondary">Discard</a>
+</div>
+
+</div>
+</form>
+
+<script>
+function isNumber(v) {
+    return /^\d+(\.\d+)?$/.test(v);
+}
+
+function showError(input, msg) {
+    input.classList.add("input-error");
+
+    let err = input.parentElement.querySelector(".error");
+    if (!err) {
+        err = document.createElement("div");
+        err.className = "error";
+        input.parentElement.appendChild(err);
+    }
+    err.innerText = msg;
+}
+
+function clearError(input) {
+    input.classList.remove("input-error");
+    let err = input.parentElement.querySelector(".error");
+    if (err) err.remove();
+}
+
+/* LIVE NUMBER VALIDATION */
+document.querySelectorAll("[data-type='number']").forEach(input => {
+    input.addEventListener("input", () => {
+        clearError(input);
+        if (input.value && !isNumber(input.value)) {
+            showError(input, "Only numbers allowed");
+        }
+    });
+});
+
+function showTab(tabId, el) {
+    if (el.classList.contains("disabled")) return;
+
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    el.classList.add("active");
+
+    document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+    document.getElementById(tabId).style.display = "block";
+}
+
+
+/*checkbox and sections*/
+function updateTabs() {
+    const sale = document.querySelector("input[name='is_sale']").checked;
+    const purchase = document.querySelector("input[name='is_purchase']").checked;
+
+    document.querySelectorAll(".tab").forEach(tab => {
+        const t = tab.dataset.tab;
+
+        if (t === "sales" && !sale) tab.classList.add("disabled");
+        else if (t === "purchase" && !purchase) tab.classList.add("disabled");
+        else tab.classList.remove("disabled");
+    });
+}
+
+document.querySelectorAll("input[name='is_sale'], input[name='is_purchase']")
+    .forEach(cb => cb.addEventListener("change", updateTabs));
+
+updateTabs();
+
+/* FORM SUBMIT VALIDATION */
+document.querySelector("form").addEventListener("submit", function (e) {
+    let hasError = false;
+    let firstErrorSection = null;
+
+    function validate(sectionId) {
+        document.querySelectorAll(`#${sectionId} [data-required]`).forEach(input => {
+            clearError(input);
+
+            if (!input.value.trim()) {
+                showError(input, "This field is required");
+                hasError = true;
+                firstErrorSection = firstErrorSection || sectionId;
+            }
+
+            if (input.dataset.type === "number" &&
+                input.value &&
+                !isNumber(input.value)) {
+                showError(input, "Only numbers allowed");
+                hasError = true;
+                firstErrorSection = firstErrorSection || sectionId;
+            }
+        });
+    }
+
+    // always validate general
+    validate("general");
+
+    if (document.querySelector("input[name='is_sale']").checked) {
+        validate("sales");
+    }
+
+    if (document.querySelector("input[name='is_purchase']").checked) {
+        validate("purchase");
+    }
+
+    if (hasError) {
+        e.preventDefault();
+
+        // 🔥 AUTO SWITCH TAB
+        if (firstErrorSection) {
+            const tab = document.querySelector(`.tab[data-tab='${firstErrorSection}']`);
+            if (tab) showTab(firstErrorSection, tab);
+        }
+
+        // scroll to first input error
+        const firstInput = document.querySelector(".input-error");
+        if (firstInput) {
+            firstInput.scrollIntoView({ behavior: "smooth", block: "center" });
+            firstInput.focus();
+        }
+    }
+});
+
+/*--------IMAGE -------*/
+document.getElementById("product_image").addEventListener("change", function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById("imagePreview");
+        img.src = e.target.result;
+        img.style.display = "block";
+        document.getElementById("imageText").style.display = "none";
+    };
+    reader.readAsDataURL(file);
+});
+
+</script>
+
+</body>
+</html>
+

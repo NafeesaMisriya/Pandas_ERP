@@ -258,13 +258,14 @@ pandass/
 
 ## 💻 Tech Stack
 
-- **Backend Framework:** [Flask](https://palletsprojects.com/p/flask/) (Python 3.10+)
+- **Frontend Architecture:** [React 18](https://react.dev/), [Vite](https://vitejs.dev/), [React Router DOM v6](https://reactrouter.com/)
+- **UI Styling & Icons:** [Tailwind CSS v3.4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
+- **HTTP Client:** [Axios](https://axios-http.com/) (with credentials support & proxying)
+- **Backend Framework:** [Flask](https://palletsprojects.com/p/flask/) (Python 3.10+) RESTful JSON APIs
 - **Database Engine:** [PostgreSQL](https://www.postgresql.org/) (Version 12 or newer)
 - **Database Driver:** [psycopg2-binary](https://pypi.org/project/psycopg2-binary/)
 - **PDF Engine:** [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) (`pisa`)
-- **Templating:** Jinja2
-- **Frontend:** Vanilla HTML5, CSS3, JavaScript
-- **Data Exchange:** JSON, CSV
+- **Templating:** Jinja2 (for automated PDF invoice compilation)
 
 ---
 
@@ -380,22 +381,34 @@ python prod_import.py
 ---
 
 ### 7. Run the Application
-Start the Flask development server:
 
-```bash
+#### Option A: One-Click Startup (Windows)
+Double-click `start.bat` or run:
+```powershell
+.\start.ps1
+```
+*(This automatically opens the Flask backend on port 5000 and the Vite React frontend on port 5173 in separate terminals).*
+
+#### Option B: Manual Command Line Startup (Recommended for Development)
+
+**Terminal 1 — Flask API Backend:**
+```powershell
+# Navigate to backend directory and start Flask
+cd backend
 python app.py
 ```
+*Backend runs at: `http://localhost:5000`*
 
-*Expected console output:*
-```text
- * Serving Flask app 'app' (lazy loading)
- * Environment: production
-   WARNING: This is a development server. Do not use it in a production deployment.
- * Debug mode: on
- * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
+**Terminal 2 — Modern React Frontend:**
+```powershell
+# In a second terminal, navigate to frontend and start Vite
+cd frontend
+npm run dev
 ```
+*Frontend runs at: `http://localhost:5173`*
 
-Open your browser and navigate to: **`http://localhost:5000`**
+Open your browser and navigate to: **`http://localhost:5173`**
+*(Vite proxies API calls to `http://localhost:5000` automatically).*
 
 ---
 
